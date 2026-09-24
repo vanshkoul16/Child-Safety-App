@@ -1,0 +1,77 @@
+{
+  "id": "com.safehaven.childsafety",
+  "name": "SafeHaven: Child Safety & Guardian",
+  "short_name": "SafeHaven",
+  "description": "Real-time child safety monitoring, explainable geofencing alerts, and emergency SOS for guardians in Jammu & beyond.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#1e3a8a",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "categories": [
+    "lifestyle",
+    "safety",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Emergency SOS",
+      "short_name": "SOS",
+      "description": "Immediate SOS alarm trigger and broadcast to guardian",
+      "url": "./index.html?mode=child&action=sos",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Live Family Map",
+      "short_name": "Live Map",
+      "description": "View live locations of all children on Google Maps",
+      "url": "./index.html?tab=map",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Parent Dashboard",
+      "short_name": "Parent",
+      "description": "Open guardian monitoring dashboard",
+      "url": "./index.html?mode=parent",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Child Mode",
+      "short_name": "Child",
+      "description": "Open child safety interface",
+      "url": "./index.html?mode=child",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

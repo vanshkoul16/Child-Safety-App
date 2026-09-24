@@ -1,0 +1,14 @@
+{
+  "name": "child-safety-app",
+  "version": "1.0.0",
+  "description": "Child safety tracking web app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "sqlite3": "^5.1.7"
+  }
+}

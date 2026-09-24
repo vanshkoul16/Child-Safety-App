@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeHaven — Child Safety & Guardian Monitoring</title>
+  <meta name="description" content="A modern, aesthetic, and reliable Child Safety & Guardian Monitoring application with real-time tracking, explainable danger detection, safe zones, and instant SOS." />
+
+  <!-- Progressive Web App (PWA) Manifest & Meta Tags -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#1e3a8a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SafeHaven" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+  <link rel="icon" type="image/svg+xml" href="assets/icons/icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
+
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS & JS for Interactive Maps (Local with CDN fallback) -->
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+  <script src="vendor/leaflet/leaflet.js"></script>
+
+  <!-- Application Stylesheets -->
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/parent.css" />
+  <link rel="stylesheet" href="css/child.css" />
+  <link rel="stylesheet" href="css/map.css" />
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- Top Universal Header & Switcher Bar -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-logo" title="SafeHaven Family Protection">🛡️</div>
+        <div class="brand-title-group">
+          <h1>
+            <span>SafeHaven</span>
+            <span class="badge-pill" style="background: var(--safe-bg); color: #047857; border: 1px solid var(--safe-border);">LIVE MONITOR</span>
+          </h1>
+          <p>Child Safety & Guardian Telemetry</p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher & Device Controls -->
+      <div class="header-actions">
+        <!-- Dual Mode Switcher -->
+        <div class="mode-segmented-control" role="tablist" aria-label="User Mode">
+          <button class="mode-btn active" data-mode="parent" onclick="window.switchMode('parent')" title="Switch to Guardian Parent Dashboard">
+            <span>👨‍👧‍👦</span>
+            <span>Parent Dashboard</span>
+          </button>
+          <button class="mode-btn" data-mode="child" onclick="window.switchMode('child')" title="Switch to Child Safety Device Interface">
+            <span>🧒</span>
+            <span>Child App Mode</span>
+          </button>
+        </div>
+
+        <!-- Gmail Account Header Pill -->
+        <button id="gmail-auth-btn" class="header-gmail-btn" onclick="window.openGmailLoginModal()" title="Gmail Guardian Account">
+          <span class="gmail-google-g">G</span>
+          <span id="header-gmail-email" class="gmail-email-text">vansh.koul@gmail.com</span>
+        </button>
+
+        <!-- Install Official App Button -->
+        <button id="pwa-install-btn" class="header-install-btn" onclick="window.promptPWAInstall()" title="Install SafeHaven as an Official App">
+          <span class="install-btn-icon">📲</span>
+          <span class="install-btn-label">Install App</span>
+        </button>
+
+        <!-- View Controls -->
+        <button id="frame-toggle-btn" class="icon-btn" title="Toggle Phone Mockup vs Full Screen" onclick="window.toggleDeviceFrame()">
+          📱
+        </button>
+        <button id="audio-toggle-btn" class="icon-btn" title="Toggle Siren & Notification Sounds" onclick="window.toggleAudioMute()">
+          🔔
+        </button>
+        <button id="theme-toggle-btn" class="icon-btn" title="Toggle Dark / Light Theme" onclick="window.toggleTheme()">
+          🌓
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Viewport Shell -->
+    <main id="main-viewport" class="main-viewport full-width-mode">
+      <div class="device-frame-container">
+        <div class="phone-mockup">
+          <div class="phone-notch">
+            <div class="notch-camera"></div>
+          </div>
+
+          <!-- Phone Status Bar -->
+          <div class="phone-status-bar">
+            <span>9:41 AM</span>
+            <span style="display: flex; gap: 4px; align-items: center;">
+              <span>5G</span>
+              <span>📶</span>
+              <span>🔋 85%</span>
+            </span>
+          </div>
+
+          <!-- 1. Parent Guardian Dashboard Mode Container -->
+          <div id="parent-container" class="parent-view" style="display: flex;">
+            <div id="parent-content-area" class="parent-content-area">
+              <!-- Rendered dynamically by parentUI.js -->
+            </div>
+
+            <!-- Bottom Navigation Bar for Parent Mode -->
+            <nav class="parent-bottom-nav" aria-label="Parent Dashboard Navigation">
+              <button class="nav-item active" data-tab="home" onclick="window.switchTab('home')">
+                <span class="nav-icon">🏠</span>
+                <span>Home</span>
+              </button>
+              <button class="nav-item" data-tab="map" onclick="window.switchTab('map')">
+                <span class="nav-icon">🗺️</span>
+                <span>Map</span>
+              </button>
+              <button class="nav-item" data-tab="alerts" onclick="window.switchTab('alerts')">
+                <span class="nav-icon">🚨</span>
+                <span>Alerts</span>
+              </button>
+              <button class="nav-item" data-tab="zones" onclick="window.switchTab('zones')">
+                <span class="nav-icon">🛡️</span>
+                <span>Safe Zones</span>
+              </button>
+              <button class="nav-item" data-tab="children" onclick="window.switchTab('children')">
+                <span class="nav-icon">👨‍👩‍👦</span>
+                <span>Children</span>
+              </button>
+              <button class="nav-item" data-tab="settings" onclick="window.switchTab('settings')">
+                <span class="nav-icon">⚙️</span>
+                <span>Settings</span>
+              </button>
+            </nav>
+          </div>
+
+          <!-- 2. Child App Interface Mode Container -->
+          <div id="child-container" class="child-view-container" style="display: none; height: 100%;">
+            <div id="child-content-area" style="height: 100%;">
+              <!-- Rendered dynamically by childUI.js -->
+            </div>
+          </div>
+
+          <div class="phone-home-indicator"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Interactive Scenario Simulator & Demo Controller (Floating Dock) -->
+    <aside class="simulator-dock" id="simulator-dock" aria-label="Demo Simulator Controls">
+      <span class="dock-badge">Demo Scenarios</span>
+
+      <button class="scenario-pill" onclick="window.simScenario1()" title="Aarav at Oakridge Academy with high battery">
+        <span>🟢</span> Normal Routine
+      </button>
+
+      <button class="scenario-pill" onclick="window.simScenario2()" title="Child exits school boundary unexpectedly">
+        <span>🟡</span> Safe Zone Exit
+      </button>
+
+      <button class="scenario-pill" onclick="window.simScenario3()" title="Route deviation + Battery drops to 9%">
+        <span>⚠️</span> Route & Battery
+      </button>
+
+      <button class="scenario-pill" onclick="window.simScenario4()" title="Trigger manual Emergency SOS alarm">
+        <span>🚨</span> SOS Alarm
+      </button>
+
+      <button class="scenario-pill" onclick="window.simScenario5()" title="GPS lost in subway or offline">
+        <span>⚪</span> GPS Lost
+      </button>
+
+      <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
+
+      <button class="scenario-pill" onclick="window.simTriggerFall()" title="Simulate impact / fall sensor trigger">
+        <span>💥</span> Fall Sensor
+      </button>
+
+      <button class="scenario-pill" onclick="window.simChildCheckIn()" title="Child sends 'I\'m Safe' confirmation">
+        <span>✅</span> "I'm Safe"
+      </button>
+
+      <button class="dock-trigger-btn" onclick="window.simResetAll()" title="Reset all children and alerts to default">
+        🔄 Reset
+      </button>
+    </aside>
+
+    <!-- Toast Notifications Toasting Container -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  </div>
+
+  <!-- Main Application ES Module -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

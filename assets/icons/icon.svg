@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#fbbf24" />
+    </linearGradient>
+  </defs>
+  <!-- Background Rounded App Tile -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)" />
+  
+  <!-- Outer Shield Aura -->
+  <path d="M256 70 C345 70 410 100 410 100 C410 280 340 395 256 442 C172 395 102 280 102 100 C102 100 167 70 256 70 Z" 
+        fill="none" stroke="url(#goldGrad)" stroke-width="12" stroke-linejoin="round" />
+  
+  <!-- Shield Body -->
+  <path d="M256 82 C335 82 395 110 395 110 C395 270 330 380 256 425 C182 380 117 270 117 110 C117 110 177 82 256 82 Z" 
+        fill="url(#shieldGrad)" />
+
+  <!-- Inner Crest Shield -->
+  <path d="M256 120 C310 120 355 140 355 140 C355 260 305 345 256 385 C207 345 157 260 157 140 C157 140 202 120 256 120 Z" 
+        fill="#1e3a8a" opacity="0.6" stroke="rgba(255,255,255,0.2)" stroke-width="4" />
+
+  <!-- V Monogram -->
+  <path d="M190 170 L235 320 L277 320 L322 170 L285 170 L256 280 L227 170 Z" 
+        fill="#ffffff" />
+
+  <!-- Green Verified Safety Badge at bottom right of shield -->
+  <circle cx="360" cy="360" r="48" fill="#10b981" stroke="#0f172a" stroke-width="8" />
+  <path d="M342 360 L354 372 L378 348" stroke="#ffffff" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
