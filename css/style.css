@@ -341,15 +341,37 @@ input:focus, select:focus, textarea:focus {
 .full-width-mode .device-frame-container {
   padding: 0;
   background: none;
+  width: 100%;
+  display: flex;
+  flex: 1;
 }
 
 .full-width-mode .phone-mockup {
   max-width: 100%;
+  width: 100%;
   height: auto;
   min-height: calc(100vh - 65px);
   border: none;
   border-radius: 0;
   box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.full-width-mode .parent-view {
+  flex: 1;
+  width: 100%;
+  min-height: calc(100vh - 65px);
+  display: flex;
+  flex-direction: column;
+}
+
+.full-width-mode .parent-content-area {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
 }
 
 .full-width-mode .phone-notch,
@@ -357,6 +379,7 @@ input:focus, select:focus, textarea:focus {
 .full-width-mode .phone-home-indicator {
   display: none;
 }
+
 
 /* Simulator Bar (Floating dock at bottom or top) */
 .simulator-dock {

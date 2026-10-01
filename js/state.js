@@ -3,9 +3,10 @@
    Authentic Jammu, J&K Family Telemetry & Live GPS Geolocation
    ========================================================= */
 
-const STORAGE_KEY = 'safehaven_state_v6'; // v6 for Vansh Koul (Father) & Gmail auth
+const STORAGE_KEY = 'safehaven_state_v7'; // v7 refreshed schema
 
 const INITIAL_STATE = {
+
   activeMode: 'parent', // 'parent' or 'child'
   activeParentTab: 'home', // 'home' | 'map' | 'alerts' | 'zones' | 'children' | 'settings'
   selectedChildId: 'c1',
@@ -342,16 +343,20 @@ class StateManager {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        const merged = {
-          ...INITIAL_STATE,
-          ...parsed,
-          auth: { ...INITIAL_STATE.auth, ...(parsed.auth || {}) },
-          parent: { ...INITIAL_STATE.parent, ...(parsed.parent || {}) },
-          settings: { ...INITIAL_STATE.settings, ...(parsed.settings || {}) }
-        };
-        // Guarantee clean base64 avatar for Vansh
-        merged.parent.avatar = INITIAL_STATE.parent.avatar;
-        return merged;
+        if (parsed && Array.isArray(parsed.children) && parsed.children.length > 0) {
+          const merged = {
+            ...INITIAL_STATE,
+            ...parsed,
+            auth: { ...INITIAL_STATE.auth, ...(parsed.auth || {}) },
+            parent: { ...INITIAL_STATE.parent, ...(parsed.parent || {}) },
+            settings: { ...INITIAL_STATE.settings, ...(parsed.settings || {}) },
+            children: parsed.children,
+            safeZones: (Array.isArray(parsed.safeZones) && parsed.safeZones.length > 0) ? parsed.safeZones : INITIAL_STATE.safeZones,
+            alerts: Array.isArray(parsed.alerts) ? parsed.alerts : INITIAL_STATE.alerts
+          };
+          merged.parent.avatar = INITIAL_STATE.parent.avatar;
+          return merged;
+        }
       }
     } catch (e) {
       console.warn('Could not parse saved state, using default:', e);
