@@ -22,10 +22,17 @@ SafeHaven is a real-time Child Safety and Live Tracking Progressive Web Applicat
 
 ---
 
-## 🚀 Deploy to Vercel (24/7 Cloud Hosting)
+## 🚀 24/7 Cloud Deployment (Vercel & Render)
 
-Deploy this app live on Vercel with 1 click:
+### Deploy to Render (Node.js Web Service)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/vanshkoul16/Child-Safety-App)
 
+1. Click the **Deploy to Render** button above or double-click **`DEPLOY_TO_RENDER.bat`**.
+2. Sign in with GitHub on Render.
+3. Render will read `render.yaml` automatically and configure the Node web service.
+4. Click **Apply** to deploy your live 24/7 service on `https://safehaven-child-safety.onrender.com`.
+
+### Deploy to Vercel (Edge CDN)
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/import?s=https://github.com/vanshkoul16/Child-Safety-App)
 
 1. Click the **Deploy with Vercel** button above or double-click **`DEPLOY_TO_VERCEL.bat`**.

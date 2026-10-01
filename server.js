@@ -84,7 +84,7 @@ process.on('unhandledRejection', (reason) => {
   console.error('SafeHaven server unhandled rejection:', reason);
 });
 
-server.listen(PORT, () => {
-  console.log(`SafeHaven 24/7 server running at http://localhost:${PORT}/`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`SafeHaven 24/7 server running on port ${PORT}`);
 });
 
