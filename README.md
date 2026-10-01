@@ -22,7 +22,19 @@ SafeHaven is a real-time Child Safety and Live Tracking Progressive Web Applicat
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Deploy to Vercel (24/7 Cloud Hosting)
+
+Deploy this app live on Vercel with 1 click:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/import?s=https://github.com/vanshkoul16/Child-Safety-App)
+
+1. Click the **Deploy with Vercel** button above or double-click **`DEPLOY_TO_VERCEL.bat`**.
+2. Sign in with GitHub and select your repository: `vanshkoul16/Child-Safety-App`.
+3. Click **Deploy**. Vercel will build and assign you a permanent live URL (e.g., `https://child-safety-app.vercel.app`) with automatic updates on every `git push`.
+
+---
+
+## 💻 Local Quick Start
 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v16 or newer recommended)
