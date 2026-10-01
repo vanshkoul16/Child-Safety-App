@@ -1,24 +1,46 @@
 # SafeHaven - Child Safety & Real-Time Monitoring Platform 🛡️👨‍👩‍👧‍👦
 
-SafeHaven is a real-time Child Safety and Live Tracking Progressive Web Application (PWA). It provides dual interfaces for **Parents** and **Children**, featuring live GPS simulation/tracking, dynamic geofencing (Safe Zones / Danger Zones), SOS emergency triggers with audio siren notifications, multi-child switching, battery monitoring, journey replay, and automated background sync.
+SafeHaven is an Apple Health and modern Fintech-inspired Child Safety and Live Tracking Progressive Web Application (PWA). It provides dual interfaces for **Parents** and **Children**, featuring live GPS tracking, dynamic geofencing (Safe Zones / Hazard Zones), SOS emergency triggers with audio sirens, multi-child monitoring, route deviation detection, battery monitoring, and automated background sync.
 
 ---
 
-## ✨ Features
+## 📱 GUI Architecture
 
-### 👨‍👩‍👦 Parent Dashboard
-- **Live Interactive Map**: Real-time Leaflet.js-powered map with smooth animations, custom child avatars, and live breadcrumb trail history.
-- **Geofence Management**: Configure and visualize Safe Zones (Home, School, Playground) and Danger Zones with instant entry/exit intrusion alerts.
-- **SOS Emergency Alerts**: High-priority visual flashing banner, pulse animations, and instant web audio siren alarm.
-- **Multi-Child Switcher**: Easily switch between and monitor multiple children (e.g., Aarav, Anaya, Kabir, Sarah) with independent status, speed, and battery tracking.
-- **Historical Journey Replay**: Playback recorded route paths with scrubbing and timestamped event logs.
-- **Offline & PWA Support**: Fully functional offline caching with Service Workers and local database persistence.
+### 👨‍💼 Parent App (5 Dedicated Core Navigation Tabs)
+1. **🏠 Home Dashboard**:
+   - Dynamic greeting (*“Good morning 👋”* / *“Good afternoon 👋”* / *“Good evening 👋”*)
+   - Glanceable Family Safety Summary chips (`🟢 2 Safe`, `🟡 1 Attention`, `🔴 0 Emergency`)
+   - Soft rounded Child Cards (`24px` radius) with live battery level and last sync timestamp (`🔋 76% • 📍 Updated 1 min ago`)
+   - Quick action buttons per child: **[ 🗺️ View Map ]**, **[ 📞 Call ]**, **[ 🚨 SOS Alert ]**
+   - Prominent **Urgent Attention Card** highlighting immediate anomalies (*“⚠️ Attention: Aarav left School Safe Zone 12m ago”*)
+2. **🗺️ Live Map**:
+   - High-precision pulsing child beacons with GPS accuracy radius
+   - Color-coded Safe Zones (DPS Jammu, Gandhi Nagar Home, M.A. Stadium) & Hazard perimeter (Tawi River)
+   - Real-time route corridor display & **Route Deviation Banner** (*“⚠️ 160m off expected route”*)
+   - Prominent **“Navigate to Child”** action with turn-by-turn routing
+   - Live synchronization timestamp
+3. **🔔 Alerts Center**:
+   - Filter chips: `All`, `🔴 Emergency`, `🟡 Safe-Zone Exits`, `⚠️ Route Deviations`, `🔋 Low Battery`, `⚪ Offline/Issues`
+   - Detailed **“Why did I receive this?”** explanation card with sensor telemetry and suggested parent actions
+4. **👨‍👩‍👧 Children (Kids Management)**:
+   - Child profiles with live hardware telemetry (battery, signal bars, GNSS precision)
+   - Safe Zones list with radius meters and **[+ Add Zone]** action
+   - Assigned routes & corridor boundaries
+   - Emergency contacts directory with 1-tap call/sms buttons
+5. **⚙️ Settings & Privacy**:
+   - Granular Location Sharing (*Always / Moving / SOS Only*)
+   - Location History retention controls (*24h / 7d / 30d*)
+   - Authorized Guardians management (Vansh Koul - Father, Sunita Koul - Mother)
+   - Push notification, SMS, and siren preferences
+   - Connected devices and anti-surveillance guarantee (zero mic/camera access)
 
-### 🧒 Child Interface
-- **One-Touch SOS Emergency Button**: Instantly triggers high-alert status and broadcasts location to parents.
-- **Live Safety Status**: Visual indicator of current zone status (In Safe Zone, En Route, Warning).
-- **Quick Actions**: "I'm Safe" check-in, "Call Parent", and "Share Live Location".
-- **Battery & Device Telemetry**: Auto-broadcasts battery percentage and connection status.
+### 🧒 Child App (“My Safety” — Calm & Distraction-Free)
+- **Large Circular SOS Button**: Pulsing red button with 3-second hold progress to prevent false alarms
+- **“I'm Safe” 1-Tap Check-In**: Instant reassuring notification to parents
+- **Current Safety Zone Badge**: Clear status badge (*“🛡️ You're in a Safe Zone — DPS Jammu”*)
+- **“Call Dad (Vansh)”**: Direct 1-tap parental calling
+- **“Share Location”**: Broadcasts immediate high-precision GNSS ping
+- Clean, distraction-free minimalist layout
 
 ---
 
