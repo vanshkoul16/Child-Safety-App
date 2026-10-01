@@ -47,6 +47,9 @@ export class ParentUI {
             </div>
           </div>
 
+          <!-- Route Deviation Indicator Banner (Top of Map) -->
+          <div id="map-route-deviation-banner" style="display: none;"></div>
+
           <!-- Leaflet Map Canvas (PERMANENT DOM NODE) -->
           <div id="leaflet-map"></div>
 
@@ -112,9 +115,31 @@ export class ParentUI {
       `).join('');
     }
 
+    // Route deviation indicator banner on map
+    const routeDevBanner = document.getElementById('map-route-deviation-banner');
+    const deviatingChild = state.children.find(c => c.safetyStatus === 'attention' || c.safetyStatus === 'danger');
+    if (routeDevBanner) {
+      if (deviatingChild) {
+        routeDevBanner.style.display = 'flex';
+        routeDevBanner.className = 'map-route-deviation-banner';
+        routeDevBanner.innerHTML = `
+          <span class="deviation-icon">⚠️</span>
+          <div class="deviation-text">
+            <div class="deviation-title">Route Deviation: ${deviatingChild.name}</div>
+            <div class="deviation-desc">${deviatingChild.statusReason}</div>
+          </div>
+          <button class="btn-deviation-focus" onclick="window.locateChild('${deviatingChild.id}')">Focus</button>
+        `;
+      } else {
+        routeDevBanner.style.display = 'none';
+      }
+    }
+
     const bottomSheet = document.getElementById('map-bottom-sheet');
     const activeChild = store.getChild(state.selectedChildId);
     if (bottomSheet && activeChild) {
+      const zone = state.safeZones.find(z => z.id === activeChild.currentZoneId);
+      const locText = zone ? `Inside ${zone.name}` : (activeChild.activity || 'Outside Safe Zones');
       bottomSheet.innerHTML = `
         <div class="sheet-drag-handle"></div>
         <div class="sheet-details">
@@ -122,19 +147,24 @@ export class ParentUI {
             <img src="${activeChild.avatar}" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #2563eb;" />
             <div>
               <div style="font-size: 0.95rem; font-weight: 800; color: var(--text-main);">
-                ${activeChild.name} • ${activeChild.safetyStatus === 'safe' ? '🟢 Safe' : activeChild.safetyStatus === 'attention' ? '🟡 Attention' : activeChild.safetyStatus === 'danger' ? '🔴 Danger' : '⚪ Offline'}
+                ${activeChild.name} &bull; ${activeChild.safetyStatus === 'safe' ? '🟢 Safe' : activeChild.safetyStatus === 'attention' ? '🟡 Attention' : activeChild.safetyStatus === 'danger' ? '🔴 Emergency' : '⚪ Unknown'}
               </div>
-              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1px;">
-                ${activeChild.statusReason}
+              <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 1px;">
+                ${locText} &bull; 📍 Updated ${this._timeAgo(activeChild.lastUpdated)}
               </div>
               <div style="font-size: 0.72rem; color: var(--text-subtle); margin-top: 2px;">
                 🔋 ${activeChild.battery}% &bull; 📶 ${activeChild.signal} &bull; ${activeChild.gpsAccuracy}
               </div>
             </div>
           </div>
-          <button class="btn btn-primary" style="font-size: 0.78rem; padding: 0.5rem 1rem;" onclick="window.navigateToChild('${activeChild.id}')">
-            🧭 Directions
-          </button>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button class="btn btn-primary" style="font-size: 0.78rem; padding: 0.5rem 0.9rem;" onclick="window.navigateToChild('${activeChild.id}')" title="Directions from Guardian">
+              🧭 Navigate to Child
+            </button>
+            <button class="btn btn-secondary" style="font-size: 0.78rem; padding: 0.5rem 0.75rem;" onclick="window.callChildPhone('${activeChild.name}')" title="Call child">
+              📞 Call
+            </button>
+          </div>
         </div>
       `;
     }
@@ -196,18 +226,16 @@ export class ParentUI {
     const safeCount = children.filter(c => c.safetyStatus === 'safe').length;
     const attentionCount = children.filter(c => c.safetyStatus === 'attention').length;
     const dangerCount = children.filter(c => c.safetyStatus === 'danger').length;
+    const unknownCount = children.filter(c => c.safetyStatus === 'unknown').length;
 
-    let overallStatus = 'normal';
-    let overallBadgeText = '🟢 All Normal';
-    if (dangerCount > 0) {
-      overallStatus = 'danger';
-      overallBadgeText = `🔴 ${dangerCount} Emergency Active`;
-    } else if (attentionCount > 0) {
-      overallStatus = 'attention';
-      overallBadgeText = `🟡 ${attentionCount} Attention Needed`;
-    }
+    // Dynamic greeting based on time of day
+    const hour = new Date().getHours();
+    const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const guardianName = (state.parent.name || 'Vansh').split(' ')[0];
 
-    const recentAlerts = (state.alerts || []).filter(a => !a.isDismissed).slice(0, 4);
+    // Priority Attention / Urgent item check
+    const activeAttentionAlert = (state.alerts || []).find(a => !a.isDismissed && (a.type === 'critical' || a.type === 'warning'));
+    const attentionChild = children.find(c => c.safetyStatus === 'danger' || c.safetyStatus === 'attention');
 
     if (state.auth && !state.auth.isAuthenticated) {
       return `
@@ -229,27 +257,80 @@ export class ParentUI {
     }
 
     return `
-      <div class="greeting-header">
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <div class="greeting-title">
-            <img src="${state.parent.avatar}" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); background: #1e3a8a; flex-shrink: 0;" />
-            <div>
-              <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-                <span style="font-weight: 800; font-size: 1.15rem;">Namaste, ${state.parent.name.split(' ')[0]} 👋</span>
-                <span class="guardian-role-badge">Father &bull; Primary Guardian</span>
-              </div>
-              <div class="greeting-subtitle">Jammu, J&K &bull; Logged in as: <strong>${state.auth ? state.auth.email : state.parent.email}</strong></div>
-            </div>
+      <!-- 1. Apple Health Style Greeting & Subtitle -->
+      <div class="home-health-header">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <h1 class="home-health-greeting">${timeGreeting} 👋</h1>
+            <p class="home-health-subtitle">Here's your family's safety</p>
           </div>
-          <button class="gmail-pill-account-btn" onclick="window.openGmailLoginModal()" title="Gmail Account Details">
+          <button class="gmail-pill-account-btn" onclick="window.openGmailLoginModal()" title="Gmail Guardian Account">
             <span class="gmail-g-tag">G</span>
-            <span class="gmail-switch-label">Switch</span>
+            <span class="gmail-switch-label">${guardianName}</span>
           </button>
+        </div>
+
+        <!-- Family Safety Summary Pills (Fintech Dashboard Badges) -->
+        <div class="safety-summary-pills-row">
+          <div class="safety-summary-pill safe" onclick="window.switchTab('children')" title="View safe children">
+            <span>🟢</span>
+            <span>${safeCount} Safe</span>
+          </div>
+          <div class="safety-summary-pill attention" onclick="window.switchTab('alerts')" title="View attention alerts">
+            <span>🟡</span>
+            <span>${attentionCount} Attention</span>
+          </div>
+          ${dangerCount > 0 ? `
+            <div class="safety-summary-pill danger" onclick="window.switchTab('alerts')" title="Emergency alerts active">
+              <span>🔴</span>
+              <span>${dangerCount} Emergency</span>
+            </div>
+          ` : ''}
+          ${unknownCount > 0 ? `
+            <div class="safety-summary-pill unknown" onclick="window.switchTab('children')" title="Offline devices">
+              <span>⚪</span>
+              <span>${unknownCount} Offline</span>
+            </div>
+          ` : ''}
         </div>
       </div>
 
-      <!-- Live GPS Banner -->
-      <div class="live-gps-banner ${state.userLiveLocation ? 'active' : ''}">
+      <!-- 2. Most Important Screen: Does anything need my attention? -->
+      ${(activeAttentionAlert || attentionChild) ? `
+        <div class="urgent-attention-card ${dangerCount > 0 ? 'danger' : 'attention'}">
+          <div class="urgent-badge-row">
+            <span class="urgent-tag">${dangerCount > 0 ? '🔴 Emergency' : '⚠️ Attention'}</span>
+            <span class="urgent-time">${this._timeAgo(activeAttentionAlert ? activeAttentionAlert.timestamp : (attentionChild ? attentionChild.lastUpdated : Date.now()))}</span>
+          </div>
+          <div class="urgent-message">
+            ${activeAttentionAlert ? activeAttentionAlert.title : `${attentionChild.name} requires your attention`}
+          </div>
+          <div class="urgent-subtext">
+            ${activeAttentionAlert ? activeAttentionAlert.what : attentionChild.statusReason}
+          </div>
+          <div class="urgent-card-actions">
+            <button class="btn btn-urgent-primary" onclick="window.switchTab('alerts')">View Alert</button>
+            <button class="btn btn-urgent-secondary" onclick="window.locateChild('${(activeAttentionAlert && activeAttentionAlert.childId) || (attentionChild && attentionChild.id) || 'c1'}')">View on Map</button>
+            <button class="btn btn-urgent-secondary" onclick="window.callChildPhone('${(activeAttentionAlert && activeAttentionAlert.childName) || (attentionChild && attentionChild.name) || 'Aarav'}')">Call</button>
+          </div>
+        </div>
+      ` : `
+        <div class="all-clear-banner">
+          <span class="all-clear-icon">✨</span>
+          <div>
+            <div class="all-clear-title">All Children Are Safe</div>
+            <div class="all-clear-desc">Every family member is inside verified safe zones with strong battery.</div>
+          </div>
+        </div>
+      `}
+
+      <!-- 3. Soft Rounded Child Cards -->
+      <div class="children-card-list">
+        ${children.map(child => this._renderChildCard(child, state)).join('')}
+      </div>
+
+      <!-- 4. Quick Live Hardware GPS Banner -->
+      <div class="live-gps-banner ${state.userLiveLocation ? 'active' : ''}" style="margin-top: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.65rem;">
           <span style="font-size: 1.35rem;">📍</span>
           <div>
@@ -265,63 +346,6 @@ export class ParentUI {
           ${state.userLiveLocation ? '🔄 Refresh GPS' : '📍 Use My Location'}
         </button>
       </div>
-
-      <!-- Family Safety Summary Box -->
-      <div class="family-safety-summary">
-        <div class="summary-headline">
-          <span class="summary-title">Family Safety Status</span>
-          <span class="summary-overall-badge ${overallStatus}">${overallBadgeText}</span>
-        </div>
-        <div class="summary-metrics-row">
-          <div class="summary-stat-box">
-            <span class="summary-stat-count safe">🟢 ${safeCount}</span>
-            <span class="summary-stat-label">Children Safe</span>
-          </div>
-          <div class="summary-stat-box">
-            <span class="summary-stat-count attention">🟡 ${attentionCount}</span>
-            <span class="summary-stat-label">Attention</span>
-          </div>
-          <div class="summary-stat-box">
-            <span class="summary-stat-count danger">🔴 ${dangerCount}</span>
-            <span class="summary-stat-label">Emergencies</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Connected Children Cards -->
-      <div class="section-header">
-        <h2 class="section-title"><span>Connected Children</span></h2>
-        <button class="section-action" onclick="window.switchTab('children')">+ Manage Devices</button>
-      </div>
-
-      <div class="children-card-list">
-        ${children.map(child => this._renderChildCard(child, state)).join('')}
-      </div>
-
-      <!-- Recent Explainable Events Feed -->
-      <div class="section-header">
-        <h2 class="section-title"><span>Recent Safety Events</span></h2>
-        <button class="section-action" onclick="window.switchTab('alerts')">View Alert Center</button>
-      </div>
-
-      <div class="recent-events-card">
-        ${recentAlerts.length === 0 ? `
-          <div style="text-align: center; padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">
-            ✨ No active safety alerts right now.
-          </div>
-        ` : recentAlerts.map(alert => `
-          <div class="event-feed-item">
-            <div class="event-severity-dot ${alert.type}"></div>
-            <div class="event-feed-info">
-              <div class="event-feed-title">
-                <span>${alert.title}</span>
-                <span class="event-feed-time">${this._timeAgo(alert.timestamp)}</span>
-              </div>
-              <div class="event-feed-desc">${alert.what}</div>
-            </div>
-          </div>
-        `).join('')}
-      </div>
     `;
   }
 
@@ -333,78 +357,63 @@ export class ParentUI {
       statusBadgeText = '🟡 Attention';
     } else if (child.safetyStatus === 'danger') {
       statusClass = 'danger';
-      statusBadgeText = '🔴 Danger';
+      statusBadgeText = '🔴 Emergency';
     } else if (child.safetyStatus === 'unknown') {
       statusClass = 'unknown';
       statusBadgeText = '⚪ Offline';
     }
 
-    let batteryClass = 'battery-good';
-    if (child.battery <= 20) batteryClass = 'battery-low';
-    else if (child.battery <= 50) batteryClass = 'battery-mid';
-
     const zone = state.safeZones.find(z => z.id === child.currentZoneId);
-    const locationName = zone ? zone.name : 'Outside Safe Zones';
-    const zoneIcon = zone ? zone.icon : '📍';
+    const locationCategory = zone ? (zone.type === 'school' ? '🏫 At School' : zone.type === 'home' ? '🏠 At Home' : '🛡️ In Safe Zone') : '📍 Outside Safe Zone';
+    const locationName = zone ? zone.name : (child.activity || 'Outside Safe Zones');
+    const childGenderIcon = child.gender === 'F' ? '👧' : '👦';
 
     return `
-      <div class="child-card border-${statusClass}">
-        <div class="child-card-top">
-          <div class="child-identity">
+      <div class="child-card-clean border-${statusClass}">
+        <!-- Top: Name + Avatar + Status Badge -->
+        <div class="child-card-header">
+          <div class="child-card-title-group">
             <div class="child-avatar-wrap">
               <div class="status-pulse-ring ${statusClass}"></div>
-              <img src="${child.avatar}" alt="${child.name}" class="child-avatar" />
+              <img src="${child.avatar}" alt="${child.name}" class="child-card-avatar" />
             </div>
-            <div class="child-name-group">
-              <h3>
-                <span>${child.name}</span>
-                <span style="font-size: 0.75rem; font-weight: normal; color: var(--text-muted);">(${child.age} yrs)</span>
-              </h3>
-              <div class="child-meta-text">${child.grade}</div>
-              <div style="font-size: 0.7rem; color: var(--text-subtle);">${child.device} &bull; ${child.carrier}</div>
+            <div>
+              <div class="child-card-name">${childGenderIcon} ${child.name}</div>
+              <div class="child-card-grade">${child.grade}</div>
             </div>
           </div>
           <span class="status-pill ${statusClass}">${statusBadgeText}</span>
         </div>
 
-        <!-- Location Context Banner -->
-        <div class="child-location-banner">
-          <div class="location-desc-group">
-            <div class="location-icon-bubble">${zoneIcon}</div>
-            <div>
-              <div class="location-text-primary">${locationName}</div>
-              <div class="location-text-secondary">${child.statusReason}</div>
-            </div>
+        <!-- Middle: Where are they? -->
+        <div class="child-location-hero">
+          <div>
+            <div class="child-location-main">${locationCategory} &bull; ${locationName}</div>
+            <div class="child-location-detail">${child.statusReason}</div>
           </div>
-          <div class="location-update-time">${this._timeAgo(child.lastUpdated)}</div>
         </div>
 
-        <!-- Telemetry Chips -->
-        <div class="child-telemetry-row">
-          <span class="telemetry-chip ${batteryClass}" title="${child.batteryDetail || ''}">
-            🔋 ${child.battery}%
-          </span>
-          <span class="telemetry-chip">
-            📶 ${child.signal}
-          </span>
-          <span class="telemetry-chip">
-            🛰️ ${child.gpsAccuracy}
-          </span>
-          <span class="telemetry-chip">
-            🏃 ${child.activity}
-          </span>
+        <!-- Telemetry: Battery + Last Update -->
+        <div class="child-telemetry-strip">
+          <span title="${child.batteryDetail || ''}">🔋 ${child.battery}%</span>
+          <span>&bull;</span>
+          <span>📍 Updated ${this._timeAgo(child.lastUpdated)}</span>
+          <span>&bull;</span>
+          <span>📶 ${child.signal}</span>
+          <span>&bull;</span>
+          <span>🛰️ ${child.gpsAccuracy}</span>
         </div>
 
-        <!-- Card Quick Action Buttons -->
-        <div class="child-card-actions">
-          <button class="card-action-btn locate-btn" onclick="window.locateChild('${child.id}')">
-            🎯 Google Maps
+        <!-- Actions: [ View Map ] [ Call ] [ SOS / Alert ] -->
+        <div class="child-card-btn-row">
+          <button class="btn-card-action primary" onclick="window.locateChild('${child.id}')" title="View child on Google Maps">
+            🗺️ View Map
           </button>
-          <button class="card-action-btn" onclick="window.showChildRoute('${child.id}')">
-            📍 Route History
+          <button class="btn-card-action" onclick="window.callChildPhone('${child.name}')" title="Call child's phone">
+            📞 Call
           </button>
-          <button class="card-action-btn" onclick="window.callChildPhone('${child.name}')">
-            📞 Call (${child.phone})
+          <button class="btn-card-action" onclick="window.navigateToChild('${child.id}')" title="Driving directions from Guardian">
+            🧭 Directions
           </button>
         </div>
       </div>
@@ -412,39 +421,59 @@ export class ParentUI {
   }
 
   /* -------------------------------------------------------------
-     ALERTS TAB CONTENT
+     ALERTS TAB CONTENT (3. Alerts: Emergency, Safe-zone, Route, Battery, Device)
      ------------------------------------------------------------- */
   renderAlertsContent(state) {
-    let alerts = state.alerts.filter(a => !a.isDismissed);
-    if (this.activeFilter === 'critical') alerts = alerts.filter(a => a.type === 'critical');
-    if (this.activeFilter === 'warning') alerts = alerts.filter(a => a.type === 'warning');
-    if (this.activeFilter === 'info') alerts = alerts.filter(a => a.type === 'info');
+    let alerts = (state.alerts || []).filter(a => !a.isDismissed);
+    if (this.activeFilter === 'emergency') {
+      alerts = alerts.filter(a => a.type === 'critical' || a.title.toLowerCase().includes('emergency') || a.title.toLowerCase().includes('sos'));
+    } else if (this.activeFilter === 'safezone') {
+      alerts = alerts.filter(a => a.title.toLowerCase().includes('safe zone') || a.title.toLowerCase().includes('departure') || a.title.toLowerCase().includes('exit') || a.title.toLowerCase().includes('arrived'));
+    } else if (this.activeFilter === 'route') {
+      alerts = alerts.filter(a => a.title.toLowerCase().includes('route') || a.title.toLowerCase().includes('deviation') || a.what.toLowerCase().includes('route'));
+    } else if (this.activeFilter === 'battery') {
+      alerts = alerts.filter(a => a.title.toLowerCase().includes('battery') || a.what.toLowerCase().includes('battery'));
+    } else if (this.activeFilter === 'device') {
+      alerts = alerts.filter(a => a.title.toLowerCase().includes('gps') || a.title.toLowerCase().includes('signal') || a.title.toLowerCase().includes('offline') || a.what.toLowerCase().includes('signal'));
+    }
+
+    const totalCount = (state.alerts || []).filter(a => !a.isDismissed).length;
+    const emergencyCount = (state.alerts || []).filter(a => !a.isDismissed && (a.type === 'critical' || a.title.toLowerCase().includes('sos'))).length;
+    const safeZoneCount = (state.alerts || []).filter(a => !a.isDismissed && (a.title.toLowerCase().includes('safe zone') || a.title.toLowerCase().includes('departure'))).length;
+    const routeCount = (state.alerts || []).filter(a => !a.isDismissed && (a.title.toLowerCase().includes('route') || a.what.toLowerCase().includes('route'))).length;
+    const batteryCount = (state.alerts || []).filter(a => !a.isDismissed && a.what.toLowerCase().includes('battery')).length;
 
     return `
       <div class="alerts-tab-header">
-        <h2 class="greeting-title"><span>Safety Alert Center</span></h2>
-        <div class="greeting-subtitle">Explainable signals, verified evidence, and recommended emergency steps.</div>
+        <h2 class="home-health-greeting" style="font-size: 1.6rem;">Safety Alerts 🔔</h2>
+        <div class="home-health-subtitle">Real-time danger detection, geofence departures, and explainable safety AI.</div>
 
-        <!-- Filter Chips -->
+        <!-- Filter Chips: Emergency, Safe-zone exits, Route deviations, Low battery, Offline -->
         <div class="filter-chips-row">
           <button class="filter-chip ${this.activeFilter === 'all' ? 'active' : ''}" onclick="window.setAlertFilter('all')">
-            All (${state.alerts.filter(a => !a.isDismissed).length})
+            All (${totalCount})
           </button>
-          <button class="filter-chip ${this.activeFilter === 'critical' ? 'active' : ''}" onclick="window.setAlertFilter('critical')">
-            🔴 Critical (${state.alerts.filter(a => !a.isDismissed && a.type === 'critical').length})
+          <button class="filter-chip ${this.activeFilter === 'emergency' ? 'active' : ''}" onclick="window.setAlertFilter('emergency')">
+            🔴 Emergency (${emergencyCount})
           </button>
-          <button class="filter-chip ${this.activeFilter === 'warning' ? 'active' : ''}" onclick="window.setAlertFilter('warning')">
-            🟡 Warning (${state.alerts.filter(a => !a.isDismissed && a.type === 'warning').length})
+          <button class="filter-chip ${this.activeFilter === 'safezone' ? 'active' : ''}" onclick="window.setAlertFilter('safezone')">
+            🟡 Safe-Zone Exits (${safeZoneCount})
           </button>
-          <button class="filter-chip ${this.activeFilter === 'info' ? 'active' : ''}" onclick="window.setAlertFilter('info')">
-            🔵 Info (${state.alerts.filter(a => !a.isDismissed && a.type === 'info').length})
+          <button class="filter-chip ${this.activeFilter === 'route' ? 'active' : ''}" onclick="window.setAlertFilter('route')">
+            ⚠️ Route Deviations (${routeCount})
+          </button>
+          <button class="filter-chip ${this.activeFilter === 'battery' ? 'active' : ''}" onclick="window.setAlertFilter('battery')">
+            🔋 Low Battery (${batteryCount})
+          </button>
+          <button class="filter-chip ${this.activeFilter === 'device' ? 'active' : ''}" onclick="window.setAlertFilter('device')">
+            ⚪ Offline / Issues
           </button>
         </div>
       </div>
 
       <div class="alerts-timeline-feed">
         ${alerts.length === 0 ? `
-          <div style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted); background: var(--bg-surface); border-radius: var(--radius-xl); border: 1px solid var(--border-light);">
+          <div style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted); background: var(--bg-surface); border-radius: 22px; border: 1px solid var(--border-light);">
             <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🛡️</div>
             <div style="font-size: 1rem; font-weight: 700; color: var(--text-main);">No alerts found</div>
             <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">All children are operating within verified safety parameters.</div>
@@ -452,43 +481,46 @@ export class ParentUI {
         ` : alerts.map(alert => `
           <div class="alert-item-card ${alert.type}">
             <div class="alert-top-meta">
-              <span class="alert-type-pill ${alert.type}">${alert.type}</span>
+              <span class="alert-type-pill ${alert.type}">${alert.type === 'critical' ? '🔴 Emergency' : alert.type === 'warning' ? '🟡 Attention' : '🔵 Notice'}</span>
               <span class="alert-timestamp">${this._timeAgo(alert.timestamp)} &bull; ${new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
 
             <div class="alert-title-main">
               <span>${alert.title}</span>
-              <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">— ${alert.childName}</span>
+              <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">— ${alert.childName}</span>
             </div>
 
-            <!-- Explainable 4-part architecture box -->
-            <div class="explainable-box">
-              <div class="explain-row">
-                <span class="explain-label">Event:</span>
-                <span class="explain-value">${alert.what}</span>
+            <!-- Requested "Why did I receive this?" Explanation Card -->
+            <div class="why-received-card">
+              <div class="why-received-header">
+                <span>💡 Why did I receive this?</span>
               </div>
-              <div class="explain-row">
-                <span class="explain-label">Evidence:</span>
-                <span class="explain-value">${alert.evidence}</span>
+              <div class="why-row">
+                <span class="why-label">Trigger Rule:</span>
+                <span class="why-text">${alert.what}</span>
               </div>
-              <div class="explain-row">
-                <span class="explain-label">Severity:</span>
-                <span class="explain-value">${alert.severity}</span>
+              <div class="why-row">
+                <span class="why-label">Sensor Telemetry:</span>
+                <span class="why-text">${alert.evidence}</span>
               </div>
-              <div class="explain-row">
-                <span class="explain-label">Action:</span>
-                <span class="explain-value" style="font-weight: 700; color: #2563eb;">${alert.recommendedAction}</span>
+              <div class="why-row">
+                <span class="why-label">Severity Level:</span>
+                <span class="why-text">${alert.severity}</span>
+              </div>
+              <div class="why-row">
+                <span class="why-label">Action Advice:</span>
+                <span class="why-text" style="font-weight: 700; color: #2563eb;">${alert.recommendedAction}</span>
               </div>
             </div>
 
             <div class="alert-actions-bar">
-              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem;" onclick="window.locateChild('${alert.childId}')">
-                📍 View on Google Map
+              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;" onclick="window.locateChild('${alert.childId}')">
+                📍 View on Map
               </button>
-              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem;" onclick="window.callChildPhone('${alert.childName}')">
+              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;" onclick="window.callChildPhone('${alert.childName}')">
                 📞 Call
               </button>
-              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem;" onclick="window.dismissAlert('${alert.id}')">
+              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;" onclick="window.dismissAlert('${alert.id}')">
                 Dismiss
               </button>
             </div>
@@ -499,15 +531,15 @@ export class ParentUI {
   }
 
   /* -------------------------------------------------------------
-     SAFE ZONES TAB CONTENT
+     SAFE ZONES TAB CONTENT (Grounded in Jammu, J&K)
      ------------------------------------------------------------- */
   renderSafeZonesContent(state) {
     const zones = state.safeZones;
     return `
       <div class="safe-zones-header">
         <div>
-          <h2 class="greeting-title"><span>Safe Zones & Geofences</span></h2>
-          <div class="greeting-subtitle">Trusted San Francisco perimeter safe zones and hazard boundaries.</div>
+          <h2 class="home-health-greeting" style="font-size: 1.6rem;">Safe Zones & Geofences 🛡️</h2>
+          <div class="home-health-subtitle">Trusted perimeter safe zones and hazard boundaries across Jammu.</div>
         </div>
         <button class="btn btn-primary" onclick="window.openAddZoneModal()">
           ➕ Add Zone
@@ -531,7 +563,7 @@ export class ParentUI {
               </div>
             </div>
             <div style="display: flex; gap: 0.4rem;">
-              <button class="icon-btn" title="View on Google Map" onclick="window.focusZoneOnMap('${zone.id}')">
+              <button class="icon-btn" title="View on Map" onclick="window.focusZoneOnMap('${zone.id}')">
                 📍
               </button>
               <button class="icon-btn" title="Delete Zone" onclick="window.deleteZoneConfirm('${zone.id}')" style="color: #ef4444;">
@@ -545,123 +577,230 @@ export class ParentUI {
   }
 
   /* -------------------------------------------------------------
-     CHILDREN TAB CONTENT
+     CHILDREN TAB CONTENT (4. Children: Profiles, Devices, Zones, Routes, Contacts)
      ------------------------------------------------------------- */
   renderChildrenContent(state) {
     const children = state.children;
+    const zones = state.safeZones;
+    const settings = state.settings;
+
     return `
-      <div class="section-header">
+      <div class="section-header" style="margin-bottom: 1.25rem;">
         <div>
-          <h2 class="greeting-title"><span>Family Profiles & Devices</span></h2>
-          <div class="greeting-subtitle">Verified Apple & Android hardware telemetry & secure pairing.</div>
+          <h2 class="home-health-greeting" style="font-size: 1.6rem;">Children & Family 👨‍👩‍👧</h2>
+          <div class="home-health-subtitle">Child profiles, device telemetry, safe zones, routes, and emergency contacts.</div>
         </div>
         <button class="btn btn-primary" onclick="window.openPairingModal()">
           📲 Pair Device
         </button>
       </div>
 
-      <div class="children-profiles-container">
-        ${children.map(child => `
-          <div class="child-profile-card">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <div style="display: flex; align-items: center; gap: 0.85rem;">
-                <img src="${child.avatar}" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2.5px solid ${child.color};" />
-                <div>
-                  <h3 style="font-size: 1.05rem; font-weight: 800;">${child.name}</h3>
-                  <div style="font-size: 0.76rem; color: var(--text-muted);">${child.grade}</div>
-                  <div style="font-size: 0.72rem; color: var(--text-subtle);">${child.device} &bull; ${child.phone}</div>
+      <!-- Sub-section 1: Child Profiles & Device Status -->
+      <div class="kids-section-card">
+        <div class="kids-section-title">
+          <span>👦 Child Profiles & Telemetry</span>
+          <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">${children.length} devices linked</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          ${children.map(child => `
+            <div style="border: 1px solid var(--border-light); border-radius: 18px; padding: 1rem; background: var(--bg-surface);">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                  <img src="${child.avatar}" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2.5px solid ${child.color};" />
+                  <div>
+                    <h3 style="font-size: 1.05rem; font-weight: 800;">${child.name} (${child.age} yrs)</h3>
+                    <div style="font-size: 0.76rem; color: var(--text-muted);">${child.grade}</div>
+                  </div>
+                </div>
+                <span class="status-pill ${child.safetyStatus === 'safe' ? 'safe' : child.safetyStatus === 'attention' ? 'attention' : child.safetyStatus === 'danger' ? 'danger' : 'unknown'}">
+                  ${child.safetyStatus === 'safe' ? '🟢 Safe' : child.safetyStatus === 'attention' ? '🟡 Attention' : child.safetyStatus === 'danger' ? '🔴 Emergency' : '⚪ Offline'}
+                </span>
+              </div>
+
+              <!-- Device Status Grid -->
+              <div class="profile-stats-grid">
+                <div class="profile-stat-tile">
+                  <span>Device Hardware</span>
+                  <strong>${child.device}</strong>
+                </div>
+                <div class="profile-stat-tile">
+                  <span>Battery Health</span>
+                  <strong>🔋 ${child.battery}% (${child.batteryDetail || 'Normal'})</strong>
+                </div>
+                <div class="profile-stat-tile">
+                  <span>Cellular Network</span>
+                  <strong>📶 ${child.carrier} &bull; ${child.signal}</strong>
+                </div>
+                <div class="profile-stat-tile">
+                  <span>GNSS Accuracy</span>
+                  <strong>🛰️ ${child.gpsAccuracy}</strong>
+                </div>
+                <div class="profile-stat-tile">
+                  <span>Operating System</span>
+                  <strong>${child.os}</strong>
+                </div>
+                <div class="profile-stat-tile">
+                  <span>Pairing PIN</span>
+                  <strong style="font-family: monospace; letter-spacing: 0.1em; color: var(--primary);">${child.pairingCode}</strong>
                 </div>
               </div>
-              <button class="btn btn-secondary" style="font-size: 0.74rem; padding: 0.35rem 0.7rem;" onclick="window.openChildHistoryModal('${child.id}')">
-                📜 Timeline
-              </button>
-            </div>
 
-            <div class="profile-stats-grid">
-              <div class="profile-stat-tile">
-                <span>Battery & Health</span>
-                <strong>${child.battery}% (${child.batteryDetail || 'Normal'})</strong>
+              <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                <button class="btn btn-secondary" style="flex: 1; font-size: 0.76rem;" onclick="window.locateChild('${child.id}')">
+                  🗺️ Locate on Map
+                </button>
+                <button class="btn btn-secondary" style="flex: 1; font-size: 0.76rem;" onclick="window.callChildPhone('${child.name}')">
+                  📞 Call (${child.phone})
+                </button>
+                <button class="btn btn-secondary" style="flex: 1; font-size: 0.76rem;" onclick="window.openChildHistoryModal('${child.id}')">
+                  📜 Timeline
+                </button>
               </div>
-              <div class="profile-stat-tile">
-                <span>GNSS Position Fix</span>
-                <strong>${child.gpsAccuracy}</strong>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Sub-section 2: Safe Zones -->
+      <div class="kids-section-card">
+        <div class="kids-section-title">
+          <span>🛡️ Safe Zones & Geofences</span>
+          <button class="btn btn-primary btn-sm" onclick="window.openAddZoneModal()">➕ Add Zone</button>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Geofenced boundaries in Jammu with automated entry and departure notifications.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+          ${zones.map(zone => `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0.9rem; border: 1px solid var(--border-light); border-radius: 14px; background: var(--bg-subtle);">
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-size: 1.4rem;">${zone.icon}</span>
+                <div>
+                  <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-main);">${zone.name}</div>
+                  <div style="font-size: 0.74rem; color: var(--text-muted);">${zone.address}</div>
+                  <div style="font-size: 0.7rem; color: var(--text-subtle); margin-top: 2px;">
+                    Radius: ${zone.radius}m &bull; ${zone.activeSchedule}
+                  </div>
+                </div>
               </div>
-              <div class="profile-stat-tile">
-                <span>Cellular Carrier</span>
-                <strong>${child.carrier}</strong>
+              <div style="display: flex; gap: 0.35rem;">
+                <button class="icon-btn" title="View on Map" onclick="window.focusZoneOnMap('${zone.id}')">📍</button>
+                <button class="icon-btn" title="Delete Zone" onclick="window.deleteZoneConfirm('${zone.id}')" style="color: #ef4444;">🗑️</button>
               </div>
-              <div class="profile-stat-tile">
-                <span>Security Pairing PIN</span>
-                <strong style="font-family: monospace; letter-spacing: 0.1em; color: var(--primary);">${child.pairingCode}</strong>
-              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Sub-section 3: Assigned Routes -->
+      <div class="kids-section-card">
+        <div class="kids-section-title">
+          <span>🛣️ Assigned Routes & Corridors</span>
+          <span style="font-size: 0.75rem; color: #10b981; font-weight: 700;">✓ Active AI Deviation Monitoring</span>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Approved travel paths between home, schools, and tutoring in Jammu.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+          <div style="border: 1px solid var(--border-light); border-radius: 14px; padding: 0.85rem; background: var(--bg-subtle);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong style="font-size: 0.88rem;">DPS Jammu School Bus Route (Aarav)</strong>
+              <span class="badge-pill" style="background: var(--safe-bg); color: #047857;">Verified Corridor</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem;">
+              Gandhi Nagar Sector 3 ➔ Bikram Chowk ➔ Tawi River Bridge ➔ Residency Road (DPS Gate)
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+              <button class="btn btn-secondary btn-sm" onclick="window.showChildRoute('c1')">📍 Preview Route on Map</button>
             </div>
           </div>
-        `).join('')}
+
+          <div style="border: 1px solid var(--border-light); border-radius: 14px; padding: 0.85rem; background: var(--bg-subtle);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong style="font-size: 0.88rem;">Presentation Convent Walking Route (Anaya)</strong>
+              <span class="badge-pill" style="background: var(--attention-bg); color: #b45309;">Pedestrian Path</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem;">
+              Presentation Convent School ➔ Sector 2 Church Road ➔ Gole Market, Gandhi Nagar
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+              <button class="btn btn-secondary btn-sm" onclick="window.showChildRoute('c2')">📍 Preview Route on Map</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub-section 4: Emergency Contacts -->
+      <div class="kids-section-card">
+        <div class="kids-section-title">
+          <span>📞 Emergency Contacts Directory</span>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Direct-dial helpline and trusted guardian contacts notified during emergency SOS.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          ${settings.emergencyContacts.map(contact => `
+            <div class="emergency-contact-item">
+              <div>
+                <div style="font-size: 0.88rem; font-weight: 800; color: var(--text-main);">${contact.name}</div>
+                <div style="font-size: 0.74rem; color: var(--text-muted);">${contact.phone} &bull; ${contact.relation}</div>
+              </div>
+              <div style="display: flex; gap: 0.4rem; align-items: center;">
+                <span class="badge-pill" style="background: ${contact.notifySOS ? 'var(--danger-bg)' : 'var(--bg-subtle)'}; color: ${contact.notifySOS ? 'var(--danger)' : 'var(--text-muted)'}; font-size: 0.7rem;">
+                  ${contact.notifySOS ? '🚨 SOS' : 'Secondary'}
+                </span>
+                <a href="tel:${contact.phone.replace(/\\s+/g, '')}" class="btn btn-secondary btn-sm" style="text-decoration: none; padding: 0.35rem 0.65rem;" title="Call">
+                  📞
+                </a>
+              </div>
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   }
 
   /* -------------------------------------------------------------
-     SETTINGS TAB CONTENT
+     SETTINGS TAB CONTENT (5. Settings: Sharing, History, Guardians, Notifications, Devices, Security)
      ------------------------------------------------------------- */
   renderSettingsContent(state) {
     const settings = state.settings;
     return `
       <div class="greeting-header">
-        <h2 class="greeting-title"><span>Settings & Privacy</span></h2>
-        <div class="greeting-subtitle">Transparency, notification routing, and data ownership.</div>
+        <h2 class="home-health-greeting" style="font-size: 1.6rem;">Settings & Privacy ⚙️</h2>
+        <div class="home-health-subtitle">Location sharing, history retention, authorized guardians, and security controls.</div>
       </div>
 
-      <!-- Privacy Transparency Commitment Card -->
-      <div class="settings-group" style="border-left: 4px solid #10b981; background: linear-gradient(180deg, var(--bg-surface) 0%, rgba(16, 185, 129, 0.04) 100%);">
-        <div class="settings-group-title">
-          <span>🛡️ Anti-Surveillance & Privacy Guarantee</span>
-        </div>
-        <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 0.5rem;">
-          SafeHaven is built on mutual family trust. We <strong>never</strong> implement covert listening, secret background camera recording, keystroke logging, or hidden tracking.
-          Children are always visually notified when their location is shared with guardians.
-        </p>
-        <div style="font-size: 0.75rem; color: #047857; font-weight: 700;">
-          ✓ End-to-end encrypted signals &bull; Explicit consent framework &bull; Zero advertising data brokerage
-        </div>
-      </div>
-
-      <!-- Notification Preferences -->
+      <!-- 1. Location Sharing -->
       <div class="settings-group">
         <div class="settings-group-title">
-          <span>🔔 Notification Preferences</span>
+          <span>📍 Location Sharing Mode</span>
         </div>
         <div class="setting-toggle-row">
           <div class="setting-info">
-            <h5>Critical Emergency SOS Alerts</h5>
-            <p>Instant siren and override alerts when child presses SOS</p>
+            <h5>Always On (Continuous 24/7 Live Tracking)</h5>
+            <p>Real-time dual L1+L5 GNSS positioning with ±1.8m accuracy</p>
           </div>
-          <input type="checkbox" class="switch-input" checked disabled title="Always forced ON for safety" />
+          <input type="radio" name="loc-share-mode" checked title="Continuous Live Tracking active" />
         </div>
         <div class="setting-toggle-row">
           <div class="setting-info">
-            <h5>Safe Zone Entry & Departure</h5>
-            <p>Alert when child enters or leaves Galileo Academy, Home, or Moscone Center</p>
+            <h5>While Moving (Power Saving Mode)</h5>
+            <p>Pings only when child accelerometer detects walking or driving</p>
           </div>
-          <input type="checkbox" class="switch-input" ${settings.notifications.safeZoneAlerts ? 'checked' : ''} onchange="window.toggleNotificationSetting('safeZoneAlerts')" />
+          <input type="radio" name="loc-share-mode" />
         </div>
         <div class="setting-toggle-row">
           <div class="setting-info">
-            <h5>Low Battery Warnings</h5>
-            <p>Alert when device battery drops below 15%</p>
+            <h5>Emergency Only (Stealth Mode)</h5>
+            <p>Shares location only when SOS button is triggered</p>
           </div>
-          <input type="checkbox" class="switch-input" ${settings.notifications.batteryAlerts ? 'checked' : ''} onchange="window.toggleNotificationSetting('batteryAlerts')" />
-        </div>
-        <div class="setting-toggle-row">
-          <div class="setting-info">
-            <h5>Location Unavailable / Stale GPS Alerts</h5>
-            <p>Notify if location updates cease for >10 minutes (e.g. BART transit)</p>
-          </div>
-          <input type="checkbox" class="switch-input" ${settings.notifications.locationUnavailable ? 'checked' : ''} onchange="window.toggleNotificationSetting('locationUnavailable')" />
+          <input type="radio" name="loc-share-mode" />
         </div>
       </div>
 
-      <!-- Location Data Retention & Privacy -->
+      <!-- 2. Location History Retention -->
       <div class="settings-group">
         <div class="settings-group-title">
           <span>🗄️ Location History Retention</span>
@@ -669,13 +808,13 @@ export class ParentUI {
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
           <div class="setting-info">
             <h5>Retention Window</h5>
-            <p>Automatically purge location logs older than this duration</p>
+            <p>Automatically purge location logs older than selected duration</p>
           </div>
           <select style="font-size: 0.82rem;" onchange="window.updateRetentionPolicy(this.value)">
+            <option value="1">24 Hours</option>
             <option value="7" ${settings.privacy.historyRetentionDays === 7 ? 'selected' : ''}>7 Days</option>
             <option value="30" ${settings.privacy.historyRetentionDays === 30 ? 'selected' : ''}>30 Days (Recommended)</option>
-            <option value="90" ${settings.privacy.historyRetentionDays === 90 ? 'selected' : ''}>90 Days</option>
-            <option value="0" ${settings.privacy.historyRetentionDays === 0 ? 'selected' : ''}>Do Not Store</option>
+            <option value="0" ${settings.privacy.historyRetentionDays === 0 ? 'selected' : ''}>Do Not Retain</option>
           </select>
         </div>
         <div style="display: flex; gap: 0.6rem;">
@@ -688,72 +827,135 @@ export class ParentUI {
         </div>
       </div>
 
-      <!-- Emergency Contacts Hierarchy -->
+      <!-- 3. Authorized Guardians -->
       <div class="settings-group">
         <div class="settings-group-title">
-          <span>🚨 Emergency Contacts Hierarchy</span>
+          <span>👨‍👩‍👧 Authorized Guardians</span>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-          ${settings.emergencyContacts.map(contact => `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border-light);">
+        <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: var(--bg-subtle); border-radius: 12px; border: 1px solid var(--border-light);">
+            <div style="display: flex; align-items: center; gap: 0.65rem;">
+              <span style="font-size: 1.4rem;">👨</span>
               <div>
-                <div style="font-size: 0.85rem; font-weight: 700;">${contact.name}</div>
-                <div style="font-size: 0.72rem; color: var(--text-muted);">${contact.phone} &bull; ${contact.relation}</div>
+                <strong style="font-size: 0.88rem;">Vansh Koul (Father)</strong>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">Primary Guardian &bull; vansh.koul@gmail.com</div>
               </div>
-              <span class="badge-pill" style="background: ${contact.notifySOS ? 'var(--danger-bg)' : 'var(--bg-subtle)'}; color: ${contact.notifySOS ? 'var(--danger)' : 'var(--text-muted)'};">
-                ${contact.notifySOS ? 'SOS Notify' : 'Secondary'}
-              </span>
             </div>
-          `).join('')}
+            <span class="badge-pill" style="background: var(--safe-bg); color: #047857;">Primary</span>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: var(--bg-subtle); border-radius: 12px; border: 1px solid var(--border-light);">
+            <div style="display: flex; align-items: center; gap: 0.65rem;">
+              <span style="font-size: 1.4rem;">👩</span>
+              <div>
+                <strong style="font-size: 0.88rem;">Sunita Koul (Mother)</strong>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">Secondary Guardian &bull; +91 98765 24811</div>
+              </div>
+            </div>
+            <span class="badge-pill" style="background: var(--bg-surface); color: var(--text-muted);">Secondary</span>
+          </div>
+        </div>
+        <button class="btn btn-secondary" style="width: 100%;" onclick="window.showToast('Guardian Added', 'Invitation link sent', 'safe')">
+          ➕ Add Authorized Guardian
+        </button>
+      </div>
+
+      <!-- 4. Notification Settings -->
+      <div class="settings-group">
+        <div class="settings-group-title">
+          <span>🔔 Notification Preferences</span>
+        </div>
+        <div class="setting-toggle-row">
+          <div class="setting-info">
+            <h5>Critical Emergency SOS Siren</h5>
+            <p>Instant siren override when child presses SOS (Always forced ON)</p>
+          </div>
+          <input type="checkbox" class="switch-input" checked disabled title="Always forced ON for safety" />
+        </div>
+        <div class="setting-toggle-row">
+          <div class="setting-info">
+            <h5>Safe Zone Entry & Departure</h5>
+            <p>Alerts when child enters or departs DPS Jammu or Home</p>
+          </div>
+          <input type="checkbox" class="switch-input" ${settings.notifications.safeZoneAlerts ? 'checked' : ''} onchange="window.toggleNotificationSetting('safeZoneAlerts')" />
+        </div>
+        <div class="setting-toggle-row">
+          <div class="setting-info">
+            <h5>Route Deviation Warnings</h5>
+            <p>Notify if child deviates >150m from designated school corridor</p>
+          </div>
+          <input type="checkbox" class="switch-input" checked onchange="window.showToast('Route Alerts', 'Sensitivity set to 150m', 'info')" />
+        </div>
+        <div class="setting-toggle-row">
+          <div class="setting-info">
+            <h5>Low Battery Warnings (< 20%)</h5>
+            <p>Alert when phone battery drops below 20%</p>
+          </div>
+          <input type="checkbox" class="switch-input" ${settings.notifications.batteryAlerts ? 'checked' : ''} onchange="window.toggleNotificationSetting('batteryAlerts')" />
+        </div>
+        <div class="setting-toggle-row">
+          <div class="setting-info">
+            <h5>Offline & Disconnection Alerts</h5>
+            <p>Alert if GPS signal ceases for >10 minutes</p>
+          </div>
+          <input type="checkbox" class="switch-input" ${settings.notifications.locationUnavailable ? 'checked' : ''} onchange="window.toggleNotificationSetting('locationUnavailable')" />
         </div>
       </div>
 
-      <!-- Gmail Account & Security Group -->
+      <!-- 5. Connected Devices -->
       <div class="settings-group">
         <div class="settings-group-title">
-          <span>📧 Guardian Account & Authentication</span>
+          <span>📱 Connected Devices</span>
         </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--bg-subtle); border-radius: var(--radius-md); margin-bottom: 0.75rem; border: 1px solid var(--border-light);">
-          <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: #ffffff; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); font-weight: 900; color: #ea4335; font-size: 1.2rem; border: 1px solid #e2e8f0;">
-              G
+        <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+          <div style="padding: 0.75rem; background: var(--bg-subtle); border-radius: 12px; border: 1px solid var(--border-light);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong>Aarav's iPhone 15 Pro (128GB, Natural Titanium)</strong>
+              <span style="color: #10b981; font-size: 0.75rem; font-weight: 700;">● Connected</span>
             </div>
-            <div>
-              <div style="font-size: 0.9rem; font-weight: 800;">${state.auth ? state.auth.name : state.parent.name} (Father)</div>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">${state.auth ? state.auth.email : state.parent.email}</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">
+              iOS 18.2 &bull; Jio True 5G &bull; End-to-end encrypted &bull; PIN: 749201
             </div>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="window.openGmailLoginModal()">
-            Switch ID
-          </button>
+          <div style="padding: 0.75rem; background: var(--bg-subtle); border-radius: 12px; border: 1px solid var(--border-light);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong>Anaya's Google Pixel 8a (Bay Blue)</strong>
+              <span style="color: #10b981; font-size: 0.75rem; font-weight: 700;">● Connected</span>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">
+              Android 15 &bull; Airtel 5G Plus &bull; End-to-end encrypted &bull; PIN: 318942
+            </div>
+          </div>
+          <div style="padding: 0.75rem; background: var(--bg-subtle); border-radius: 12px; border: 1px solid var(--border-light);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong>Kabir's Galaxy S24 Ultra (Titanium Gray)</strong>
+              <span style="color: #10b981; font-size: 0.75rem; font-weight: 700;">● Connected</span>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">
+              Android 15 / One UI 7.0 &bull; Jio 5G &bull; End-to-end encrypted &bull; PIN: 592184
+            </div>
+          </div>
         </div>
-        <div style="display: flex; gap: 0.6rem;">
-          <button class="btn btn-secondary" style="flex: 1;" onclick="window.openGmailLoginModal()">
-            ⚙️ Manage Gmail Auth
-          </button>
-          <button class="btn btn-secondary" style="flex: 1; color: #dc2626; border-color: rgba(220, 38, 38, 0.3);" onclick="window.logoutCurrentGmail()">
-            🚪 Sign Out
-          </button>
-        </div>
+        <button class="btn btn-secondary" style="width: 100%; margin-top: 0.75rem;" onclick="window.openPairingModal()">
+          ➕ Pair New Child Device
+        </button>
       </div>
 
-      <!-- Security Audit Log -->
-      <div class="settings-group">
+      <!-- 6. Security & Privacy Transparency -->
+      <div class="settings-group" style="border-left: 4px solid #10b981; background: linear-gradient(180deg, var(--bg-surface) 0%, rgba(16, 185, 129, 0.04) 100%);">
         <div class="settings-group-title">
-          <span>📋 Account Security Audit Log</span>
+          <span>🛡️ Anti-Surveillance & Privacy Guarantee</span>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 0.45rem;">
-          ${settings.auditLog.slice(0, 5).map(log => `
-            <div style="font-size: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between;">
-              <div>
-                <strong style="color: var(--text-main);">${log.action}:</strong>
-                <span style="color: var(--text-muted);">${log.details}</span>
-              </div>
-              <span style="color: var(--text-subtle); white-space: nowrap; margin-left: 8px;">${this._timeAgo(log.timestamp)}</span>
-            </div>
-          `).join('')}
+        <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 0.5rem;">
+          SafeHaven is built on family safety and mutual trust. We <strong>never</strong> implement covert listening, secret background camera recording, keystroke logging, or covert tracking.
+          Children are always visually notified when their location is shared.
+        </p>
+        <div style="font-size: 0.75rem; color: #047857; font-weight: 700;">
+          ✓ 256-bit AES encryption &bull; Explicit consent framework &bull; Zero advertising data broker sales
         </div>
       </div>
+    `;
+  }
     `;
   }
 

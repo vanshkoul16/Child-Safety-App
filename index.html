@@ -111,29 +111,25 @@
               <!-- Rendered dynamically by parentUI.js -->
             </div>
 
-            <!-- Bottom Navigation Bar for Parent Mode -->
+            <!-- Bottom Navigation Bar for Parent Mode (5 Core Screens) -->
             <nav class="parent-bottom-nav" aria-label="Parent Dashboard Navigation">
-              <button class="nav-item active" data-tab="home" onclick="window.switchTab('home')">
+              <button class="nav-item active" data-tab="home" onclick="window.switchTab('home')" id="nav-btn-home">
                 <span class="nav-icon">🏠</span>
                 <span>Home</span>
               </button>
-              <button class="nav-item" data-tab="map" onclick="window.switchTab('map')">
+              <button class="nav-item" data-tab="map" onclick="window.switchTab('map')" id="nav-btn-map">
                 <span class="nav-icon">🗺️</span>
                 <span>Map</span>
               </button>
-              <button class="nav-item" data-tab="alerts" onclick="window.switchTab('alerts')">
-                <span class="nav-icon">🚨</span>
+              <button class="nav-item" data-tab="alerts" onclick="window.switchTab('alerts')" id="nav-btn-alerts">
+                <span class="nav-icon">🔔</span>
                 <span>Alerts</span>
               </button>
-              <button class="nav-item" data-tab="zones" onclick="window.switchTab('zones')">
-                <span class="nav-icon">🛡️</span>
-                <span>Safe Zones</span>
+              <button class="nav-item" data-tab="children" onclick="window.switchTab('children')" id="nav-btn-kids">
+                <span class="nav-icon">👨‍👩‍👧</span>
+                <span>Kids</span>
               </button>
-              <button class="nav-item" data-tab="children" onclick="window.switchTab('children')">
-                <span class="nav-icon">👨‍👩‍👦</span>
-                <span>Children</span>
-              </button>
-              <button class="nav-item" data-tab="settings" onclick="window.switchTab('settings')">
+              <button class="nav-item" data-tab="settings" onclick="window.switchTab('settings')" id="nav-btn-settings">
                 <span class="nav-icon">⚙️</span>
                 <span>Settings</span>
               </button>

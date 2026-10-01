@@ -1139,3 +1139,516 @@
   width: 100%;
   max-width: 440px;
 }
+
+/* =========================================================
+   Apple Health + Google Maps + Fintech Dashboard Enhancements
+   ========================================================= */
+
+/* 1. Home Dashboard Apple Health Style Header */
+.home-health-header {
+  margin-bottom: 1.25rem;
+}
+
+.home-health-greeting {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.home-health-subtitle {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+/* Family Safety Pill Row (Fintech Badges) */
+.safety-summary-pills-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1rem 0 1.25rem;
+  flex-wrap: wrap;
+}
+
+.safety-summary-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-full);
+  font-size: 0.88rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.safety-summary-pill.safe {
+  background-color: var(--safe-bg);
+  color: #047857;
+  border-color: var(--safe-border);
+}
+
+.safety-summary-pill.attention {
+  background-color: var(--attention-bg);
+  color: #b45309;
+  border-color: var(--attention-border);
+}
+
+.safety-summary-pill.danger {
+  background-color: var(--danger-bg);
+  color: #b91c1c;
+  border-color: var(--danger-border);
+  animation: pulseEmergency 1.4s infinite;
+}
+
+.safety-summary-pill.unknown {
+  background-color: var(--unknown-bg);
+  color: #475569;
+  border-color: var(--unknown-border);
+}
+
+.safety-summary-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* 2. Most Important Screen: Urgent Attention Card */
+.urgent-attention-card {
+  background: linear-gradient(135deg, rgba(254, 243, 199, 0.6) 0%, rgba(255, 251, 235, 0.95) 100%);
+  border: 1.5px solid var(--attention-border);
+  border-radius: 24px;
+  padding: 1.25rem 1.4rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  position: relative;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .urgent-attention-card {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.9) 100%);
+  border-color: rgba(245, 158, 11, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.urgent-attention-card.danger {
+  background: linear-gradient(135deg, rgba(254, 226, 226, 0.7) 0%, rgba(254, 242, 242, 0.95) 100%);
+  border-color: var(--danger-border);
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.15);
+}
+
+[data-theme="dark"] .urgent-attention-card.danger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(30, 41, 59, 0.9) 100%);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.urgent-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.urgent-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #b45309;
+}
+
+.urgent-attention-card.danger .urgent-tag {
+  color: #dc2626;
+}
+
+.urgent-time {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.urgent-message {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.3;
+}
+
+.urgent-subtext {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.urgent-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+}
+
+.btn-urgent-primary {
+  background-color: var(--attention);
+  color: white;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius-full);
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+}
+
+.btn-urgent-primary:hover {
+  background-color: #d97706;
+}
+
+.urgent-attention-card.danger .btn-urgent-primary {
+  background-color: var(--danger);
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+.btn-urgent-secondary {
+  background-color: rgba(255, 255, 255, 0.85);
+  color: var(--text-main);
+  border: 1px solid var(--border-light);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--radius-full);
+}
+
+[data-theme="dark"] .btn-urgent-secondary {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+/* All Clear Banner (when 0 attention/danger) */
+.all-clear-banner {
+  background: linear-gradient(135deg, rgba(236, 253, 245, 0.8) 0%, rgba(240, 253, 244, 0.95) 100%);
+  border: 1.5px solid var(--safe-border);
+  border-radius: 22px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+[data-theme="dark"] .all-clear-banner {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(30, 41, 59, 0.9) 100%);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.all-clear-icon {
+  font-size: 1.5rem;
+}
+
+.all-clear-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #047857;
+}
+
+[data-theme="dark"] .all-clear-title {
+  color: #34d399;
+}
+
+.all-clear-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* 3. Soft Rounded Child Card Styling */
+.child-card-clean {
+  background-color: var(--bg-surface);
+  border-radius: 24px;
+  border: 1px solid var(--border-light);
+  padding: 1.4rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.child-card-clean:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.07);
+}
+
+.child-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.child-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.child-card-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2.5px solid var(--primary-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.child-card-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.child-card-grade {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.child-location-hero {
+  background-color: var(--bg-subtle);
+  border-radius: 18px;
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.child-location-main {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.child-location-detail {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.child-telemetry-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.child-card-btn-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  padding-top: 0.25rem;
+}
+
+.btn-card-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 1px solid var(--border-light);
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-card-action:hover {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary-subtle);
+}
+
+.btn-card-action.primary {
+  background-color: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.btn-card-action.primary:hover {
+  background-color: var(--primary-hover);
+}
+
+/* 4. Live Map: Route Deviation Indicator & Navigation Prominence */
+.map-route-deviation-banner {
+  position: absolute;
+  top: 4.8rem;
+  left: 1rem;
+  right: 1rem;
+  z-index: 1001;
+  background: rgba(254, 243, 199, 0.94);
+  backdrop-filter: blur(14px);
+  border: 1.5px solid var(--attention-border);
+  border-radius: 20px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  box-shadow: var(--shadow-md);
+  animation: slideDown 0.3s ease-out;
+}
+
+[data-theme="dark"] .map-route-deviation-banner {
+  background: rgba(30, 41, 59, 0.94);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.deviation-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.deviation-text {
+  flex: 1;
+}
+
+.deviation-title {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: #b45309;
+}
+
+[data-theme="dark"] .deviation-title {
+  color: #fbbf24;
+}
+
+.deviation-desc {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.btn-deviation-focus {
+  background-color: var(--attention);
+  color: white;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-full);
+}
+
+/* 5. Alerts Tab: Explainable AI "Why did I receive this?" Disclosure */
+.why-received-card {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.why-received-header {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.why-row {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.why-label {
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.why-text {
+  color: var(--text-main);
+}
+
+/* 6. Kids Tab Sub-sections (Profiles, Devices, Safe Zones, Routes, Contacts) */
+.kids-nav-pills {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+  margin-bottom: 1.25rem;
+}
+
+.kids-subnav-btn {
+  padding: 0.45rem 0.95rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 700;
+  background-color: var(--bg-surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border-light);
+  white-space: nowrap;
+}
+
+.kids-subnav-btn.active {
+  background-color: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.kids-section-card {
+  background-color: var(--bg-surface);
+  border-radius: 22px;
+  border: 1px solid var(--border-light);
+  padding: 1.25rem 1.4rem;
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.kids-section-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.emergency-contact-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.emergency-contact-item:last-child {
+  border-bottom: none;
+}
+
