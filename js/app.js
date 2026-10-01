@@ -935,4 +935,72 @@ window.logoutCurrentGmail = function() {
   showToast('Signed Out', 'Guardian session locked. Sign in to view telemetry.', 'info');
 };
 
+/* =========================================================
+   PWA Installation & Service Worker Registration
+   ========================================================= */
+
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) {
+    installBtn.style.display = 'inline-flex';
+    installBtn.classList.add('pulse-ready');
+  }
+});
+
+window.promptPWAInstall = async function() {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    if (outcome === 'accepted') {
+      showToast('App Installed', 'SafeHaven is now installed on your device!', 'safe');
+    }
+    deferredInstallPrompt = null;
+  } else {
+    // Show instruction modal for browsers that don't support automated prompt
+    openModal(
+      '📲 Install SafeHaven App',
+      `
+        <div style="text-align: center; padding: 0.5rem 0;">
+          <div style="font-size: 3rem; margin-bottom: 0.5rem;">📱</div>
+          <h4 style="font-size: 1.05rem; font-weight: 800; margin-bottom: 0.4rem; color: var(--text-main);">Install as Official App</h4>
+          <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1rem;">
+            SafeHaven runs as a standalone Progressive Web App with 24/7 background syncing, offline caching, and instant launch from your home screen or desktop.
+          </p>
+          <div style="text-align: left; background: var(--bg-subtle); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.85rem; font-size: 0.78rem; line-height: 1.6; color: var(--text-main);">
+            <strong>Desktop Chrome / Edge:</strong> Click the <strong>Install</strong> icon (💻/➕) in your browser address bar.<br/>
+            <strong>iOS (Safari):</strong> Tap <strong>Share</strong> (⬆️) and select <strong>"Add to Home Screen"</strong>.<br/>
+            <strong>Android (Chrome):</strong> Tap <strong>Menu (⋮)</strong> and select <strong>"Install App"</strong>.
+          </div>
+        </div>
+      `,
+      `<button class="btn btn-primary" style="width: 100%;" onclick="window.closeModal()">Got it</button>`
+    );
+  }
+};
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) installBtn.style.display = 'none';
+  showToast('SafeHaven Active', 'Installed as standalone application.', 'safe');
+});
+
+// Register Service Worker
+if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then((reg) => {
+        console.log('[SafeHaven] Service Worker registered with scope:', reg.scope);
+      })
+      .catch((err) => {
+        console.warn('[SafeHaven] Service Worker registration skipped or failed:', err);
+      });
+  });
+}
+
+
 
