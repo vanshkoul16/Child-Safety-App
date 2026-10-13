@@ -273,68 +273,69 @@ input:focus, select:focus, textarea:focus {
   align-items: center;
   padding: 1.5rem 1rem 3rem;
   flex: 1;
-  background: radial-gradient(circle at 50% 20%, rgba(37, 99, 235, 0.05), transparent 70%);
+  background: radial-gradient(circle at 50% 20%, #ffffff 0%, #edf0f5 100%);
 }
 
 .phone-mockup {
   width: 100%;
-  max-width: 420px;
-  height: 860px;
-  background-color: var(--bg-main);
-  border-radius: 46px;
-  border: 10px solid #1e293b;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  max-width: 395px;
+  height: 844px;
+  background-color: var(--ios-bg, #f2f2f7);
+  border-radius: 54px;
+  border: 11px solid #202022;
+  box-shadow: 
+    0 0 0 2px #48484a,
+    0 0 0 4px #1c1c1e,
+    0 25px 65px -12px rgba(0, 0, 0, 0.35),
+    0 10px 30px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   position: relative;
+  transition: all 0.3s ease;
 }
 
-.phone-notch {
-  width: 140px;
-  height: 24px;
-  background-color: #1e293b;
+.phone-dynamic-island {
   position: absolute;
-  top: 0;
+  top: 11px;
   left: 50%;
   transform: translateX(-50%);
-  border-bottom-left-radius: 14px;
-  border-bottom-right-radius: 14px;
-  z-index: 9999;
+  width: 124px;
+  height: 35px;
+  background-color: #000000;
+  border-radius: 20px;
+  z-index: 1000;
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-
-.notch-camera {
-  width: 10px;
-  height: 10px;
-  background-color: #0f172a;
-  border-radius: 50%;
-  margin-left: 30px;
+  justify-content: flex-end;
+  padding-right: 11px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
 }
 
 .phone-status-bar {
-  padding: 0.6rem 1.4rem 0.3rem;
+  padding: 13px 26px 4px 28px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.75rem;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-main);
   z-index: 500;
 }
 
 .phone-home-indicator {
-  width: 120px;
-  height: 4px;
-  background-color: var(--text-subtle);
-  border-radius: 3px;
+  width: 138px;
+  height: 5px;
+  background-color: #000000;
+  border-radius: 100px;
   position: absolute;
   bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 500;
+  opacity: 0.85;
+  z-index: 1000;
+  pointer-events: none;
 }
 
 /* Fullscreen / Desktop Layout mode */

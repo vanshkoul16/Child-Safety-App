@@ -1,0 +1,777 @@
+/* =========================================================
+   Apple iOS Screen Time & Time Allowances Design System
+   Exact Pixel-Perfect Match for iOS Parental Controls
+   ========================================================= */
+
+/* iOS Typography & Token Variables */
+:root {
+  --ios-bg: #f2f2f7;
+  --ios-card-bg: #ffffff;
+  --ios-text-primary: #000000;
+  --ios-text-secondary: #8e8e93;
+  --ios-text-tertiary: #c7c7cc;
+  --ios-blue: #007aff;
+  --ios-orange-start: #ff9f0a;
+  --ios-orange-end: #ff7a00;
+  --ios-divider: #e5e5ea;
+  --ios-segment-bg: #e3e3e8;
+  --ios-stepper-bg: #f2f2f7;
+  --ios-stepper-border: #d1d1d6;
+  --ios-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+[data-theme="dark"] {
+  --ios-bg: #000000;
+  --ios-card-bg: #1c1c1e;
+  --ios-text-primary: #ffffff;
+  --ios-text-secondary: #8e8e93;
+  --ios-text-tertiary: #48484a;
+  --ios-blue: #0a84ff;
+  --ios-divider: #2c2c2e;
+  --ios-segment-bg: #2c2c2e;
+  --ios-stepper-bg: #2c2c2e;
+  --ios-stepper-border: #3a3a3c;
+}
+
+/* =========================================================
+   iPhone 15/16 Pro Titanium Bezel & Frame System
+   ========================================================= */
+.device-frame-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 65px);
+  padding: 1.5rem 1rem 2.5rem;
+  background: radial-gradient(circle at 50% 10%, #ffffff 0%, #edf0f5 100%);
+}
+
+.phone-mockup {
+  width: 100%;
+  max-width: 395px;
+  height: 844px;
+  background-color: var(--ios-bg);
+  border-radius: 54px;
+  border: 11px solid #202022;
+  box-shadow: 
+    0 0 0 2px #48484a,
+    0 0 0 4px #1c1c1e,
+    0 25px 65px -12px rgba(0, 0, 0, 0.35),
+    0 10px 30px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  font-family: var(--ios-font);
+  user-select: none;
+  transition: all 0.3s ease;
+}
+
+/* Dynamic Island */
+.phone-dynamic-island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 124px;
+  height: 35px;
+  background-color: #000000;
+  border-radius: 20px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 11px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.island-sensor {
+  width: 6px;
+  height: 6px;
+  background: #090a0f;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.island-camera {
+  width: 11px;
+  height: 11px;
+  background: radial-gradient(circle at 35% 35%, #1d2545 0%, #0d101a 60%, #000000 100%);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* iOS Status Bar */
+.phone-status-bar {
+  padding: 13px 26px 4px 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ios-text-primary);
+  font-family: var(--ios-font);
+  z-index: 500;
+  line-height: 1;
+}
+
+.status-time {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.status-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 4-bar cellular signal */
+.signal-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 11px;
+}
+
+.signal-bars .bar {
+  width: 3px;
+  background-color: var(--ios-text-primary);
+  border-radius: 0.5px;
+}
+
+.signal-bars .bar-1 { height: 3.5px; }
+.signal-bars .bar-2 { height: 6px; }
+.signal-bars .bar-3 { height: 8.5px; }
+.signal-bars .bar-4 { height: 11px; }
+
+.wifi-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--ios-text-primary);
+}
+
+/* Battery outline pill */
+.battery-pill {
+  width: 23px;
+  height: 11.5px;
+  border: 1.5px solid var(--ios-text-primary);
+  border-radius: 3.5px;
+  padding: 1.5px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: 1px;
+}
+
+.battery-pill::after {
+  content: '';
+  position: absolute;
+  right: -3.5px;
+  top: 2.8px;
+  width: 1.5px;
+  height: 4px;
+  background-color: var(--ios-text-primary);
+  border-top-right-radius: 1px;
+  border-bottom-right-radius: 1px;
+}
+
+.battery-level {
+  width: 100%;
+  height: 100%;
+  background-color: var(--ios-text-primary);
+  border-radius: 1px;
+}
+
+/* Bottom Home Indicator */
+.phone-home-indicator {
+  width: 138px;
+  height: 5px;
+  background-color: var(--ios-text-primary);
+  border-radius: 100px;
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0.85;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* =========================================================
+   Apple Screen Time & Time Allowances Screen
+   ========================================================= */
+.ios-time-view-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--ios-bg);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 24px;
+  position: relative;
+  scrollbar-width: none; /* Hide scrollbar for iOS native look */
+}
+
+.ios-time-view-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Top Navigation Bar with Circular Back Button */
+.ios-time-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px 4px 16px;
+  min-height: 44px;
+  position: sticky;
+  top: 0;
+  background-color: var(--ios-bg);
+  z-index: 100;
+}
+
+.ios-back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--ios-card-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  color: var(--ios-text-primary);
+}
+
+.ios-back-btn:hover {
+  transform: scale(1.04);
+  background-color: #f7f7f9;
+}
+
+.ios-back-btn:active {
+  transform: scale(0.94);
+  opacity: 0.8;
+}
+
+/* Optional Quick Child Picker Pill */
+.ios-child-picker-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--ios-card-bg);
+  padding: 4px 10px 4px 5px;
+  border-radius: 100px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ios-child-picker-pill:hover {
+  background-color: #fafafc;
+}
+
+.ios-child-avatar-mini {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.ios-child-picker-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ios-text-primary);
+}
+
+.ios-child-picker-arrow {
+  font-size: 10px;
+  color: var(--ios-text-secondary);
+}
+
+/* =========================================================
+   Card 1: Intro / Feature Card ("Time Allowances")
+   ========================================================= */
+.ios-card {
+  background-color: var(--ios-card-bg);
+  border-radius: 24px;
+  margin: 0 16px 14px 16px;
+  padding: 20px 20px 16px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  position: relative;
+  transition: box-shadow 0.2s ease;
+}
+
+.ios-intro-card {
+  margin-top: 6px;
+}
+
+/* Orange Squircle with Hourglass */
+.ios-hourglass-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, var(--ios-orange-start) 0%, var(--ios-orange-end) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(255, 159, 10, 0.28);
+  margin-bottom: 12px;
+}
+
+.ios-card-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ios-text-primary);
+  letter-spacing: -0.025em;
+  margin: 0 0 4px 0;
+  line-height: 1.2;
+}
+
+.ios-card-subtitle {
+  font-size: 14px;
+  color: var(--ios-text-secondary);
+  line-height: 1.4;
+  margin: 0 0 16px 0;
+  font-weight: 400;
+}
+
+.ios-learn-more-link {
+  color: var(--ios-blue);
+  text-decoration: none;
+  font-weight: 400;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.ios-learn-more-link:hover {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+.ios-hairline-divider {
+  height: 0.5px;
+  background-color: var(--ios-divider);
+  width: 100%;
+  margin: 14px 0 14px 0;
+  border: none;
+}
+
+/* "Manage Categories" Row */
+.ios-manage-categories-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 4px 0 2px 0;
+  transition: opacity 0.15s ease;
+}
+
+.ios-manage-categories-row:hover {
+  opacity: 0.85;
+}
+
+.ios-row-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ios-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.ios-row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Category Badge Cluster (4 colorful app category squircle icons) */
+.ios-category-badge-cluster {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cat-chip {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.chip-entertainment {
+  background: linear-gradient(135deg, #ff2d55, #ff375f);
+}
+
+.chip-games {
+  background: linear-gradient(135deg, #af52de, #bf5af2);
+}
+
+.chip-social {
+  background: linear-gradient(135deg, #32ade6, #5ac8fa);
+}
+
+.chip-education {
+  background: linear-gradient(135deg, #007aff, #0056b3);
+}
+
+.ios-chevron-right {
+  color: var(--ios-text-tertiary);
+  transition: transform 0.15s ease;
+}
+
+.ios-manage-categories-row:hover .ios-chevron-right {
+  transform: translateX(2px);
+}
+
+/* =========================================================
+   Segmented Control ("Weekdays" | "Weekends")
+   ========================================================= */
+.ios-segmented-control {
+  background-color: var(--ios-segment-bg);
+  border-radius: 100px;
+  padding: 3px;
+  display: flex;
+  margin: 2px 16px 14px 16px;
+  position: relative;
+  gap: 2px;
+}
+
+.ios-segment-btn {
+  flex: 1;
+  text-align: center;
+  padding: 7px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ios-text-secondary);
+  border-radius: 100px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: var(--ios-font);
+}
+
+.ios-segment-btn.active {
+  background-color: var(--ios-card-bg);
+  color: var(--ios-text-primary);
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.ios-segment-btn:hover:not(.active) {
+  color: var(--ios-text-primary);
+}
+
+/* =========================================================
+   Section Header ("Shared Time Allowance")
+   ========================================================= */
+.ios-section-header {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ios-text-secondary);
+  margin: 0 24px 8px 24px;
+  letter-spacing: -0.01em;
+}
+
+/* =========================================================
+   Card 2: Time Allowance & Categories Card
+   ========================================================= */
+.ios-allowance-card {
+  padding: 18px 20px 16px 20px;
+  margin-bottom: 24px;
+}
+
+/* Top-Right Info Button */
+.ios-info-btn {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--ios-blue);
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.ios-info-btn:hover {
+  transform: scale(1.1);
+  opacity: 0.85;
+}
+
+/* Big Bold Time Headline */
+.ios-allowance-headline {
+  font-size: 38px;
+  font-weight: 700;
+  color: var(--ios-text-primary);
+  text-align: center;
+  letter-spacing: -0.035em;
+  margin: 6px 0 18px 0;
+  line-height: 1;
+}
+
+/* Slider Track Wrapper */
+.ios-slider-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.ios-slider-track-wrap {
+  width: 100%;
+  position: relative;
+  padding: 10px 0 20px 0;
+}
+
+/* Custom Styled iOS Slider */
+.ios-range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 100px;
+  background: linear-gradient(
+    to right, 
+    var(--ios-blue) 0%, 
+    var(--ios-blue) var(--fill-pct, 16.67%), 
+    var(--ios-divider) var(--fill-pct, 16.67%), 
+    var(--ios-divider) 100%
+  );
+  outline: none;
+  cursor: pointer;
+  position: relative;
+  z-index: 10;
+}
+
+.ios-range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 32px;
+  height: 22px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 
+    0 3px 8px rgba(0, 0, 0, 0.2), 
+    0 1px 3px rgba(0, 0, 0, 0.12),
+    0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  cursor: grab;
+  transition: transform 0.1s ease;
+}
+
+.ios-range-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.06);
+}
+
+.ios-range-slider::-moz-range-thumb {
+  width: 32px;
+  height: 22px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 
+    0 3px 8px rgba(0, 0, 0, 0.2), 
+    0 1px 3px rgba(0, 0, 0, 0.12),
+    0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  cursor: grab;
+  border: none;
+}
+
+/* 3 hr Tick Marker & Label */
+.ios-slider-tick-marker {
+  position: absolute;
+  top: 10px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 5;
+}
+
+.ios-tick-notch {
+  width: 2px;
+  height: 12px;
+  background-color: var(--ios-divider);
+  border-radius: 1px;
+  margin-top: -3px;
+}
+
+.ios-tick-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ios-text-secondary);
+  margin-top: 5px;
+  white-space: nowrap;
+}
+
+/* Guidance Pill below slider */
+.ios-guidance-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ios-text-secondary);
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
+
+.guidance-check-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ios-text-secondary);
+}
+
+/* Category Rows List */
+.ios-category-rows-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.ios-category-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 0;
+}
+
+.ios-category-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ios-cat-icon-squircle {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.cat-squircle-entertainment {
+  background: linear-gradient(135deg, #ff2d55 0%, #ff375f 100%);
+}
+
+.cat-squircle-games {
+  background: linear-gradient(135deg, #af52de 0%, #bf5af2 100%);
+}
+
+.cat-squircle-social {
+  background: linear-gradient(135deg, #32ade6 0%, #5ac8fa 100%);
+}
+
+.ios-cat-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.ios-cat-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ios-text-primary);
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+.ios-cat-limit {
+  font-size: 13px;
+  color: var(--ios-text-secondary);
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+/* Hairline divider indented to text start */
+.ios-row-hairline {
+  height: 0.5px;
+  background-color: var(--ios-divider);
+  width: calc(100% - 50px);
+  margin-left: 50px;
+}
+
+/* iOS Capsule Stepper: [- | +] */
+.ios-stepper {
+  background-color: var(--ios-stepper-bg);
+  border-radius: 8px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.ios-stepper-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ios-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  user-select: none;
+  font-family: var(--ios-font);
+}
+
+.ios-stepper-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.ios-stepper-btn:active {
+  background-color: rgba(0, 0, 0, 0.12);
+  transform: scale(0.92);
+}
+
+.ios-stepper-divider {
+  width: 0.5px;
+  height: 18px;
+  background-color: var(--ios-stepper-border);
+}
+
+/* Hide parent bottom nav on Time Allowances tab to match screenshot exactly */
+.tab-time-allowances-active .parent-bottom-nav {
+  display: none !important;
+}
+
+.tab-time-allowances-active .parent-content-area {
+  padding-bottom: 20px !important;
+}
+
+/* Responsive adjustment for small physical mobile screens */
+@media (max-width: 480px) {
+  .device-frame-container {
+    padding: 0;
+    background: none;
+  }
+  .phone-mockup {
+    max-width: 100%;
+    height: 100vh;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+}

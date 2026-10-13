@@ -3,17 +3,42 @@
    Authentic Jammu, J&K Family Telemetry & Live GPS Geolocation
    ========================================================= */
 
-const STORAGE_KEY = 'safehaven_state_v7'; // v7 refreshed schema
+const STORAGE_KEY = 'safehaven_state_v8'; // v8 Apple Screen Time UI refreshed schema
 
 const INITIAL_STATE = {
 
   activeMode: 'parent', // 'parent' or 'child'
-  activeParentTab: 'home', // 'home' | 'map' | 'alerts' | 'zones' | 'children' | 'settings'
+  activeParentTab: 'time-allowances', // 'time-allowances' | 'home' | 'map' | 'alerts' | 'zones' | 'children' | 'settings'
   selectedChildId: 'c1',
-  isDeviceFrame: false,
+  isDeviceFrame: true, // Default to true for the iPhone product showcase view
   theme: 'light',
   isAudioMuted: false,
   mapStyle: 'google_streets', // 'google_streets' | 'google_hybrid' | 'google_terrain'
+
+  // Apple Screen Time & Time Allowances
+  timeAllowances: {
+    activeDayType: 'weekdays', // 'weekdays' | 'weekends'
+    c1: {
+      weekdays: {
+        sharedAllowanceMinutes: 60, // 1 hour
+        categories: {
+          entertainment: 60, // Up to 1 hour
+          games: 60,         // Up to 1 hour
+          socialMedia: 30,   // Up to 30m
+          education: 120
+        }
+      },
+      weekends: {
+        sharedAllowanceMinutes: 120, // 2 hours
+        categories: {
+          entertainment: 90,
+          games: 90,
+          socialMedia: 60,
+          education: 180
+        }
+      }
+    }
+  },
 
   // Gmail Authentication Session
   auth: {
@@ -45,11 +70,11 @@ const INITIAL_STATE = {
   children: [
     {
       id: 'c1',
-      name: 'Aarav',
-      age: 11,
-      gender: 'M',
-      avatar: 'assets/avatars/aarav.jpg',
-      grade: '6th Grade • Delhi Public School (DPS) Jammu',
+      name: 'Anneliese',
+      age: 10,
+      gender: 'F',
+      avatar: 'assets/avatars/anaya.jpg',
+      grade: '5th Grade • Delhi Public School (DPS) Jammu',
       color: '#2563eb',
       device: 'Apple iPhone 15 Pro (128GB, Natural Titanium)',
       os: 'iOS 18.2 (22C152)',
@@ -604,6 +629,59 @@ class StateManager {
       details: `Session closed for ${this.state.auth.email}`
     });
     this.save();
+  }
+
+  /* Apple Screen Time & Time Allowances Handlers */
+  setTimeAllowanceDayType(dayType) {
+    const current = this.state.timeAllowances || {};
+    this.update({
+      timeAllowances: {
+        ...current,
+        activeDayType: dayType
+      }
+    });
+  }
+
+  updateSharedAllowance(childId, minutes) {
+    const current = this.state.timeAllowances || {};
+    const childIdKey = childId || this.state.selectedChildId || 'c1';
+    const childSettings = current[childIdKey] || {
+      weekdays: { sharedAllowanceMinutes: 60, categories: { entertainment: 60, games: 60, socialMedia: 30, education: 120 } },
+      weekends: { sharedAllowanceMinutes: 120, categories: { entertainment: 90, games: 90, socialMedia: 60, education: 180 } }
+    };
+    const activeDay = current.activeDayType || 'weekdays';
+    if (!childSettings[activeDay]) childSettings[activeDay] = { sharedAllowanceMinutes: 60, categories: {} };
+    childSettings[activeDay].sharedAllowanceMinutes = Math.max(0, Math.min(360, parseInt(minutes, 10)));
+
+    this.update({
+      timeAllowances: {
+        ...current,
+        [childIdKey]: childSettings
+      }
+    });
+  }
+
+  updateCategoryAllowance(childId, categoryKey, deltaMinutes) {
+    const current = this.state.timeAllowances || {};
+    const childIdKey = childId || this.state.selectedChildId || 'c1';
+    const childSettings = current[childIdKey] || {
+      weekdays: { sharedAllowanceMinutes: 60, categories: { entertainment: 60, games: 60, socialMedia: 30, education: 120 } },
+      weekends: { sharedAllowanceMinutes: 120, categories: { entertainment: 90, games: 90, socialMedia: 60, education: 180 } }
+    };
+    const activeDay = current.activeDayType || 'weekdays';
+    if (!childSettings[activeDay]) childSettings[activeDay] = { sharedAllowanceMinutes: 60, categories: {} };
+    const cats = childSettings[activeDay].categories || { entertainment: 60, games: 60, socialMedia: 30 };
+    const currentVal = cats[categoryKey] !== undefined ? cats[categoryKey] : 60;
+    const newVal = Math.max(0, Math.min(360, currentVal + deltaMinutes));
+    cats[categoryKey] = newVal;
+    childSettings[activeDay].categories = cats;
+
+    this.update({
+      timeAllowances: {
+        ...current,
+        [childIdKey]: childSettings
+      }
+    });
   }
 
   resetToDefaults() {

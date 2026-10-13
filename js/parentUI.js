@@ -18,6 +18,7 @@ export class ParentUI {
     if (!this.container) return;
 
     this.container.innerHTML = `
+      <div id="tab-time-allowances" class="parent-tab-screen" style="padding: 0; margin: 0; background: var(--ios-bg, #f2f2f7); height: 100%;"></div>
       <div id="tab-home" class="parent-tab-screen"></div>
       <div id="tab-map" class="parent-tab-screen" style="padding: 0; margin: 0; height: 100%;">
         <div class="map-view-container">
@@ -96,7 +97,19 @@ export class ParentUI {
   render() {
     if (!this.container || !this.isMounted) return;
     const state = store.get();
-    const activeTab = state.activeParentTab || 'home';
+    const activeTab = state.activeParentTab || 'time-allowances';
+
+    // 0. Time Allowances Tab (Apple iOS Screen Time Interface)
+    const timeTab = document.getElementById('tab-time-allowances');
+    if (timeTab) {
+      timeTab.innerHTML = this.renderTimeAllowancesContent(state);
+    }
+
+    // Toggle active class on parent-view container to handle bottom nav hiding
+    const parentView = this.container.closest('.parent-view');
+    if (parentView) {
+      parentView.classList.toggle('tab-time-allowances-active', activeTab === 'time-allowances');
+    }
 
     // 1. Home Tab
     const homeTab = document.getElementById('tab-home');
@@ -194,7 +207,7 @@ export class ParentUI {
     }
 
     // 7. Toggle Active Tab visibility
-    const tabs = ['home', 'map', 'alerts', 'zones', 'children', 'settings'];
+    const tabs = ['time-allowances', 'home', 'map', 'alerts', 'zones', 'children', 'settings'];
     tabs.forEach(tab => {
       const el = document.getElementById(`tab-${tab}`);
       if (el) {
@@ -216,6 +229,230 @@ export class ParentUI {
       mapCtrl.renderSelectedChildRoute();
       mapCtrl.renderLiveUserMarker();
     }
+  /* -------------------------------------------------------------
+     APPLE SCREEN TIME & TIME ALLOWANCES METHODS
+     ------------------------------------------------------------- */
+  formatAllowanceTime(minutes) {
+    const mins = parseInt(minutes, 10) || 0;
+    if (mins === 0) return '0m';
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    if (hours > 0 && remMins > 0) return `${hours} hr ${remMins}m`;
+    if (hours === 1) return '1 hour';
+    if (hours > 1) return `${hours} hours`;
+    return `${remMins}m`;
+  }
+
+  renderTimeAllowancesContent(state) {
+    const child = store.getChild(state.selectedChildId) || state.children[0];
+    const timeSettings = state.timeAllowances || {};
+    const childSettings = timeSettings[child.id] || timeSettings['c1'] || {
+      weekdays: { sharedAllowanceMinutes: 60, categories: { entertainment: 60, games: 60, socialMedia: 30, education: 120 } },
+      weekends: { sharedAllowanceMinutes: 120, categories: { entertainment: 90, games: 90, socialMedia: 60, education: 180 } }
+    };
+    const activeDay = timeSettings.activeDayType || 'weekdays';
+    const dayData = childSettings[activeDay] || { sharedAllowanceMinutes: 60, categories: { entertainment: 60, games: 60, socialMedia: 30 } };
+    const sharedMinutes = dayData.sharedAllowanceMinutes ?? 60;
+    const cats = dayData.categories || { entertainment: 60, games: 60, socialMedia: 30 };
+    const fillPercent = ((sharedMinutes / 360) * 100).toFixed(2);
+
+    return `
+      <div class="ios-time-view-container">
+        <!-- Top iOS Navigation Bar with Circular Back Button -->
+        <div class="ios-time-nav-bar">
+          <button class="ios-back-btn" onclick="window.switchTab('home')" title="Back to Family Overview" aria-label="Back">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          
+          <div class="ios-child-picker-pill" onclick="window.openChildPickerModal()" title="Switch Child (Current: ${child.name})">
+            <img src="${child.avatar || 'assets/avatars/anaya.jpg'}" alt="${child.name}" class="ios-child-avatar-mini" />
+            <span class="ios-child-picker-name">${child.name}</span>
+            <span class="ios-child-picker-arrow">▾</span>
+          </div>
+        </div>
+
+        <!-- Card 1: Time Allowances Feature Card -->
+        <div class="ios-card ios-intro-card">
+          <!-- Orange Squircle Hourglass Badge -->
+          <div class="ios-hourglass-badge">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 22h14"></path>
+              <path d="M5 2h14"></path>
+              <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path>
+              <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path>
+            </svg>
+          </div>
+
+          <h2 class="ios-card-title">Time Allowances</h2>
+          
+          <p class="ios-card-subtitle">
+            Set how long ${child.name} can use categories of apps and websites. 
+            <a href="#" class="ios-learn-more-link" onclick="window.openTimeAllowancesInfo(event)">Learn more...</a>
+          </p>
+
+          <div class="ios-hairline-divider"></div>
+
+          <!-- Manage Categories Row -->
+          <div class="ios-manage-categories-row" onclick="window.openManageCategoriesModal()">
+            <span class="ios-row-label">Manage Categories</span>
+            <div class="ios-row-right">
+              <div class="ios-category-badge-cluster">
+                <span class="cat-chip chip-entertainment" title="Entertainment">🍿</span>
+                <span class="cat-chip chip-games" title="Games">🚀</span>
+                <span class="cat-chip chip-social" title="Social Media">💬</span>
+                <span class="cat-chip chip-education" title="Education & Productivity">🎒</span>
+              </div>
+              <svg class="ios-chevron-right" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Segmented Control: Weekdays vs Weekends -->
+        <div class="ios-segmented-control" role="tablist">
+          <button class="ios-segment-btn ${activeDay === 'weekdays' ? 'active' : ''}" 
+                  onclick="window.setTimeAllowanceDayType('weekdays')" role="tab">
+            Weekdays
+          </button>
+          <button class="ios-segment-btn ${activeDay === 'weekends' ? 'active' : ''}" 
+                  onclick="window.setTimeAllowanceDayType('weekends')" role="tab">
+            Weekends
+          </button>
+        </div>
+
+        <!-- Section Header -->
+        <div class="ios-section-header">Shared Time Allowance</div>
+
+        <!-- Card 2: Shared Allowance & Category Limits -->
+        <div class="ios-card ios-allowance-card">
+          <!-- Info Circle Button Top-Right -->
+          <button class="ios-info-btn" onclick="window.openTimeGuidanceModal()" title="Screen Time Guidance Guidelines">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </button>
+
+          <!-- Large Dynamic Time Display -->
+          <div class="ios-allowance-headline" id="ios-shared-headline">
+            ${this.formatAllowanceTime(sharedMinutes)}
+          </div>
+
+          <!-- Slider Container -->
+          <div class="ios-slider-container">
+            <div class="ios-slider-track-wrap">
+              <input type="range" 
+                     id="ios-shared-slider" 
+                     class="ios-range-slider" 
+                     min="0" 
+                     max="360" 
+                     step="15" 
+                     value="${sharedMinutes}" 
+                     style="--fill-pct: ${fillPercent}%;"
+                     oninput="window.onSharedSliderInput(this.value)" 
+                     onchange="window.onSharedSliderChange(this.value)" />
+              
+              <!-- 3 hr Tick Marker & Label -->
+              <div class="ios-slider-tick-marker" style="left: 50%;">
+                <div class="ios-tick-notch"></div>
+                <span class="ios-tick-label">3 hr</span>
+              </div>
+            </div>
+
+            <!-- Guidance Status Badge -->
+            <div class="ios-guidance-pill" id="ios-guidance-pill">
+              ${sharedMinutes <= 180 ? `
+                <span class="guidance-check-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="9 12 11.5 14.5 15.5 9.5"></polyline>
+                  </svg>
+                </span>
+                <span>Within General Guidance</span>
+              ` : `
+                <span style="font-size: 14px;">⚠️</span>
+                <span style="color: #f59e0b; font-weight: 600;">Above General Guidance (3 hr recommended)</span>
+              `}
+            </div>
+          </div>
+
+          <div class="ios-hairline-divider" style="margin-top: 18px; margin-bottom: 6px;"></div>
+
+          <!-- Category Stepper Rows List -->
+          <div class="ios-category-rows-list">
+
+            <!-- 1. Entertainment -->
+            <div class="ios-category-row">
+              <div class="ios-category-left">
+                <div class="ios-cat-icon-squircle cat-squircle-entertainment">
+                  <span>🍿</span>
+                </div>
+                <div class="ios-cat-text">
+                  <div class="ios-cat-name">Entertainment</div>
+                  <div class="ios-cat-limit" id="limit-entertainment-text">
+                    Up to ${this.formatAllowanceTime(cats.entertainment ?? 60)}
+                  </div>
+                </div>
+              </div>
+              <div class="ios-stepper">
+                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'entertainment', -15)" title="Decrease 15 min">–</button>
+                <div class="ios-stepper-divider"></div>
+                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'entertainment', 15)" title="Increase 15 min">+</button>
+              </div>
+            </div>
+
+            <div class="ios-row-hairline"></div>
+
+            <!-- 2. Games -->
+            <div class="ios-category-row">
+              <div class="ios-category-left">
+                <div class="ios-cat-icon-squircle cat-squircle-games">
+                  <span>🚀</span>
+                </div>
+                <div class="ios-cat-text">
+                  <div class="ios-cat-name">Games</div>
+                  <div class="ios-cat-limit" id="limit-games-text">
+                    Up to ${this.formatAllowanceTime(cats.games ?? 60)}
+                  </div>
+                </div>
+              </div>
+              <div class="ios-stepper">
+                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'games', -15)" title="Decrease 15 min">–</button>
+                <div class="ios-stepper-divider"></div>
+                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'games', 15)" title="Increase 15 min">+</button>
+              </div>
+            </div>
+
+            <div class="ios-row-hairline"></div>
+
+            <!-- 3. Social Media -->
+            <div class="ios-category-row">
+              <div class="ios-category-left">
+                <div class="ios-cat-icon-squircle cat-squircle-social">
+                  <span>💬</span>
+                </div>
+                <div class="ios-cat-text">
+                  <div class="ios-cat-name">Social Media</div>
+                  <div class="ios-cat-limit" id="limit-socialMedia-text">
+                    Up to ${this.formatAllowanceTime(cats.socialMedia ?? 30)}
+                  </div>
+                </div>
+              </div>
+              <div class="ios-stepper">
+                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'socialMedia', -15)" title="Decrease 15 min">–</button>
+                <div class="ios-stepper-divider"></div>
+                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'socialMedia', 15)" title="Increase 15 min">+</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   /* -------------------------------------------------------------
@@ -404,10 +641,13 @@ export class ParentUI {
           <span>🛰️ ${child.gpsAccuracy}</span>
         </div>
 
-        <!-- Actions: [ View Map ] [ Call ] [ SOS / Alert ] -->
+        <!-- Actions: [ Screen Time ] [ View Map ] [ Call ] [ Directions ] -->
         <div class="child-card-btn-row">
-          <button class="btn-card-action primary" onclick="window.locateChild('${child.id}')" title="View child on Google Maps">
-            🗺️ View Map
+          <button class="btn-card-action primary" onclick="window.switchTab('time-allowances')" title="Screen Time & Category Allowances">
+            ⏳ Limits
+          </button>
+          <button class="btn-card-action" onclick="window.locateChild('${child.id}')" title="View child on Google Maps">
+            🗺️ Map
           </button>
           <button class="btn-card-action" onclick="window.callChildPhone('${child.name}')" title="Call child's phone">
             📞 Call

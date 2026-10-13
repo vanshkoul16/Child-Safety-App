@@ -1002,5 +1002,211 @@ if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || win
   });
 }
 
+// -------------------------------------------------------------
+// APPLE SCREEN TIME & TIME ALLOWANCES WINDOW CONTROLLERS
+// -------------------------------------------------------------
+
+function formatMinutesDisplay(minutes) {
+  const mins = parseInt(minutes, 10) || 0;
+  if (mins === 0) return '0m';
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  if (hours > 0 && remMins > 0) return `${hours} hr ${remMins}m`;
+  if (hours === 1) return '1 hour';
+  if (hours > 1) return `${hours} hours`;
+  return `${remMins}m`;
+}
+
+window.onSharedSliderInput = function(val) {
+  const minutes = parseInt(val, 10) || 0;
+  const headline = document.getElementById('ios-shared-headline');
+  if (headline) {
+    headline.innerText = formatMinutesDisplay(minutes);
+  }
+
+  const slider = document.getElementById('ios-shared-slider');
+  if (slider) {
+    const pct = ((minutes / 360) * 100).toFixed(2);
+    slider.style.setProperty('--fill-pct', `${pct}%`);
+  }
+
+  const pill = document.getElementById('ios-guidance-pill');
+  if (pill) {
+    if (minutes <= 180) {
+      pill.innerHTML = `
+        <span class="guidance-check-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="9 12 11.5 14.5 15.5 9.5"></polyline>
+          </svg>
+        </span>
+        <span>Within General Guidance</span>
+      `;
+    } else {
+      pill.innerHTML = `
+        <span style="font-size: 14px;">⚠️</span>
+        <span style="color: #f59e0b; font-weight: 600;">Above General Guidance (3 hr recommended)</span>
+      `;
+    }
+  }
+};
+
+window.onSharedSliderChange = function(val) {
+  const childId = store.get().selectedChildId || 'c1';
+  store.updateSharedAllowance(childId, parseInt(val, 10));
+  soundFx.playSafeChime();
+};
+
+window.setTimeAllowanceDayType = function(dayType) {
+  store.setTimeAllowanceDayType(dayType);
+  soundFx.playPing();
+};
+
+window.stepCategory = function(childId, categoryKey, deltaMinutes) {
+  store.updateCategoryAllowance(childId, categoryKey, deltaMinutes);
+  soundFx.playPing();
+};
+
+window.openTimeAllowancesInfo = function(event) {
+  if (event) event.preventDefault();
+  const child = store.getChild(store.get().selectedChildId) || store.get().children[0];
+  openModal(
+    '⏳ Screen Time & Allowances',
+    `
+      <div style="text-align: left; line-height: 1.6; color: var(--text-main);">
+        <p style="margin-bottom: 0.8rem; font-size: 0.88rem;">
+          <strong>Time Allowances</strong> allow parents and guardians to set healthy daily limits on specific categories of apps and websites for <strong>${child.name}</strong>.
+        </p>
+        <div style="background: var(--bg-subtle); border-radius: var(--radius-md); padding: 0.85rem; font-size: 0.8rem; margin-bottom: 1rem; border: 1px solid var(--border-light);">
+          <div style="margin-bottom: 0.4rem;">🕒 <strong>Shared Allowance:</strong> Total combined screen time allocated across all active entertainment and recreational apps.</div>
+          <div style="margin-bottom: 0.4rem;">🍿 <strong>Entertainment:</strong> Video streaming, podcasts, and media players (YouTube, Netflix).</div>
+          <div style="margin-bottom: 0.4rem;">🚀 <strong>Games:</strong> Mobile and web video games (Roblox, Minecraft).</div>
+          <div>💬 <strong>Social Media:</strong> Messaging and social networking apps.</div>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--text-muted);">
+          When the daily allowance expires, apps in restricted categories are locked until the next day or until granted additional time via Guardian Passcode.
+        </p>
+      </div>
+    `,
+    `<button class="btn btn-primary" style="width: 100%;" onclick="window.closeModal()">Done</button>`
+  );
+};
+
+window.openManageCategoriesModal = function() {
+  const child = store.getChild(store.get().selectedChildId) || store.get().children[0];
+  openModal(
+    '📱 Manage App Categories',
+    `
+      <div style="text-align: left; color: var(--text-main); font-size: 0.84rem;">
+        <p style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.8rem;">
+          Select which categories and applications on <strong>${child.name}</strong>'s device are included in daily time limits:
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.8rem; background: var(--bg-subtle); border-radius: 12px; border: 1px solid var(--border-light);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 1.3rem;">🍿</span>
+              <div>
+                <strong>Entertainment</strong>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">YouTube, Netflix, Disney+, Prime Video</div>
+              </div>
+            </div>
+            <input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #007aff;" />
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.8rem; background: var(--bg-subtle); border-radius: 12px; border: 1px solid var(--border-light);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 1.3rem;">🚀</span>
+              <div>
+                <strong>Games</strong>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">Roblox, Minecraft, Subway Surfers, Brawl Stars</div>
+              </div>
+            </div>
+            <input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #007aff;" />
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.8rem; background: var(--bg-subtle); border-radius: 12px; border: 1px solid var(--border-light);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 1.3rem;">💬</span>
+              <div>
+                <strong>Social Media</strong>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">Messages, FaceTime, Instagram, TikTok</div>
+              </div>
+            </div>
+            <input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #007aff;" />
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.8rem; background: var(--bg-subtle); border-radius: 12px; border: 1px solid var(--border-light);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 1.3rem;">🎒</span>
+              <div>
+                <strong>Education & Productivity</strong>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">Duolingo, Khan Academy, Google Classroom (Always Allowed)</div>
+              </div>
+            </div>
+            <span style="font-size: 0.72rem; color: #10b981; font-weight: 700;">ALWAYS ALLOWED</span>
+          </div>
+        </div>
+      </div>
+    `,
+    `<button class="btn btn-primary" style="width: 100%;" onclick="window.closeModal(); showToast('Saved', 'Category preferences updated', 'safe');">Save Category Rules</button>`
+  );
+};
+
+window.openTimeGuidanceModal = function() {
+  openModal(
+    'ℹ️ Screen Time Recommendations',
+    `
+      <div style="text-align: left; color: var(--text-main); font-size: 0.85rem; line-height: 1.6;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.8rem;">
+          <span style="font-size: 2rem;">🩺</span>
+          <div>
+            <h4 style="font-size: 0.95rem; font-weight: 700;">Pediatric Screen Time Guidance</h4>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Based on American Academy of Pediatrics (AAP) standards</div>
+          </div>
+        </div>
+        <p style="margin-bottom: 0.8rem; font-size: 0.82rem;">
+          Health experts recommend establishing clear daily digital boundaries to encourage physical activity, sleep hygiene, and focused study:
+        </p>
+        <ul style="padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 1rem;">
+          <li><strong>Weekdays:</strong> 1 to 2 hours of recreational screen time is recommended.</li>
+          <li><strong>Weekends:</strong> Up to 3 hours with balance for outdoor activities.</li>
+          <li><strong>Bedtime:</strong> Screen time should cease at least 60 minutes before sleep.</li>
+        </ul>
+        <div style="background: var(--safe-bg); border: 1px solid var(--safe-border); border-radius: 10px; padding: 0.75rem; color: #065f46; font-size: 0.78rem;">
+          ✅ Educational apps and family communication tools do not count toward recreational limits.
+        </div>
+      </div>
+    `,
+    `<button class="btn btn-primary" style="width: 100%;" onclick="window.closeModal()">Understood</button>`
+  );
+};
+
+window.openChildPickerModal = function() {
+  const state = store.get();
+  openModal(
+    '👨‍👧‍👦 Select Child Profile',
+    `
+      <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+        ${state.children.map(c => `
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: ${c.id === state.selectedChildId ? 'var(--primary-light)' : 'var(--bg-subtle)'}; border: 1px solid ${c.id === state.selectedChildId ? 'var(--primary)' : 'var(--border-light)'}; border-radius: 14px; cursor: pointer;"
+               onclick="store.update({ selectedChildId: '${c.id}' }); window.closeModal(); showToast('Profile Switched', 'Viewing limits for ${c.name}', 'info');">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <img src="${c.avatar}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" />
+              <div>
+                <strong style="color: var(--text-main); font-size: 0.92rem;">${c.name}</strong>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">${c.grade || `${c.age} years old`} &bull; ${c.device}</div>
+              </div>
+            </div>
+            ${c.id === state.selectedChildId ? '<span style="color: var(--primary); font-weight: 800; font-size: 1.1rem;">✓</span>' : ''}
+          </div>
+        `).join('')}
+      </div>
+    `,
+    `<button class="btn btn-secondary" style="width: 100%;" onclick="window.closeModal()">Cancel</button>`
+  );
+};
+
+
 
 
