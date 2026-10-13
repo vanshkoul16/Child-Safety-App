@@ -229,6 +229,8 @@ export class ParentUI {
       mapCtrl.renderSelectedChildRoute();
       mapCtrl.renderLiveUserMarker();
     }
+  } // end render()
+
   /* -------------------------------------------------------------
      APPLE SCREEN TIME & TIME ALLOWANCES METHODS
      ------------------------------------------------------------- */
