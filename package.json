@@ -1,15 +1,15 @@
 {
   "name": "child-safety-app",
   "version": "1.0.0",
-  "description": "Child safety tracking web app",
-  "main": "server.js",
+  "description": "SafeHaven - Child safety and guardian monitoring PWA",
   "scripts": {
     "start": "node server.js",
-    "build": "echo SafeHaven build ready for Vercel deployment"
+    "dev": "node server.js",
+    "build": "echo SafeHaven static build ready"
   },
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "sqlite3": "^5.1.7"
-  }
+  "engines": {
+    "node": ">=18.x"
+  },
+  "author": "vanshkoul16",
+  "license": "MIT"
 }
