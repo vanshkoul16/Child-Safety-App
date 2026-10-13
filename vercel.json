@@ -1,7 +1,5 @@
 {
   "version": 2,
-  "cleanUrls": true,
-  "trailingSlash": false,
   "headers": [
     {
       "source": "/sw.js",
@@ -26,28 +24,15 @@
         {
           "key": "Content-Type",
           "value": "application/manifest+json; charset=utf-8"
-        },
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
         }
       ]
     },
     {
-      "source": "/js/(.*)\\.js",
+      "source": "/(.*)\\.js",
       "headers": [
         {
           "key": "Content-Type",
           "value": "text/javascript; charset=utf-8"
-        }
-      ]
-    },
-    {
-      "source": "/css/(.*)\\.css",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "text/css; charset=utf-8"
         }
       ]
     },
@@ -65,17 +50,13 @@
         {
           "key": "X-XSS-Protection",
           "value": "1; mode=block"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
         }
       ]
     }
   ],
   "rewrites": [
     {
-      "source": "/((?!index\\.html|css|js|assets|vendor|manifest\\.json|sw\\.js|favicon\\.ico).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
