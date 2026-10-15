@@ -264,122 +264,36 @@ input:focus, select:focus, textarea:focus {
   flex-direction: column;
   position: relative;
   overflow-x: hidden;
-}
-
-/* Mobile Frame Wrapper for Demo / Testing */
-.device-frame-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 1.5rem 1rem 3rem;
-  flex: 1;
-  background: radial-gradient(circle at 50% 20%, #ffffff 0%, #edf0f5 100%);
-}
-
-.phone-mockup {
+  min-height: calc(100vh - 65px);
   width: 100%;
-  max-width: 395px;
-  height: 844px;
-  background-color: var(--ios-bg, #f2f2f7);
-  border-radius: 54px;
-  border: 11px solid #202022;
-  box-shadow: 
-    0 0 0 2px #48484a,
-    0 0 0 4px #1c1c1e,
-    0 25px 65px -12px rgba(0, 0, 0, 0.35),
-    0 10px 30px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
+}
+
+.parent-view {
+  flex: 1;
+  width: 100%;
+  min-height: calc(100vh - 65px);
   display: flex;
   flex-direction: column;
   position: relative;
-  transition: all 0.3s ease;
+  background-color: var(--bg-main);
 }
 
-.phone-dynamic-island {
-  position: absolute;
-  top: 11px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 124px;
-  height: 35px;
-  background-color: #000000;
-  border-radius: 20px;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 11px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-  pointer-events: none;
-}
-
-.phone-status-bar {
-  padding: 13px 26px 4px 28px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-main);
-  z-index: 500;
-}
-
-.phone-home-indicator {
-  width: 138px;
-  height: 5px;
-  background-color: #000000;
-  border-radius: 100px;
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0.85;
-  z-index: 1000;
-  pointer-events: none;
-}
-
-/* Fullscreen / Desktop Layout mode */
-.full-width-mode .device-frame-container {
-  padding: 0;
-  background: none;
-  width: 100%;
-  display: flex;
-  flex: 1;
-}
-
-.full-width-mode .phone-mockup {
-  max-width: 100%;
-  width: 100%;
-  height: auto;
-  min-height: calc(100vh - 65px);
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-
-.full-width-mode .parent-view {
-  flex: 1;
-  width: 100%;
-  min-height: calc(100vh - 65px);
-  display: flex;
-  flex-direction: column;
-}
-
-.full-width-mode .parent-content-area {
+.parent-content-area {
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
   flex: 1;
+  padding: 1rem 1rem 5.5rem;
 }
 
-.full-width-mode .phone-notch,
-.full-width-mode .phone-status-bar,
-.full-width-mode .phone-home-indicator {
-  display: none;
+.child-view-container {
+  flex: 1;
+  width: 100%;
+  min-height: calc(100vh - 65px);
+  display: flex;
+  flex-direction: column;
 }
+
 
 
 /* Simulator Bar (Floating dock at bottom or top) */

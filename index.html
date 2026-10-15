@@ -76,9 +76,6 @@
         </button>
 
         <!-- View Controls -->
-        <button id="frame-toggle-btn" class="icon-btn" title="Toggle Phone Mockup vs Full Screen" onclick="window.toggleDeviceFrame()">
-          📱
-        </button>
         <button id="audio-toggle-btn" class="icon-btn" title="Toggle Siren & Notification Sounds" onclick="window.toggleAudioMute()">
           🔔
         </button>
@@ -90,72 +87,41 @@
 
     <!-- Main Viewport Shell -->
     <main id="main-viewport" class="main-viewport">
-      <div class="device-frame-container">
-        <div class="phone-mockup">
-          <!-- iPhone 16 Pro Dynamic Island -->
-          <div class="phone-dynamic-island">
-            <div class="island-sensor"></div>
-            <div class="island-camera"></div>
-          </div>
+      <!-- 1. Parent Guardian Dashboard Mode Container -->
+      <div id="parent-container" class="parent-view" style="display: flex;">
+        <div id="parent-content-area" class="parent-content-area">
+          <!-- Rendered dynamically by parentUI.js -->
+        </div>
 
-          <!-- iOS Status Bar -->
-          <div class="phone-status-bar">
-            <span class="status-time">9:41</span>
-            <span class="status-icons">
-              <span class="signal-bars">
-                <span class="bar bar-1"></span>
-                <span class="bar bar-2"></span>
-                <span class="bar bar-3"></span>
-                <span class="bar bar-4"></span>
-              </span>
-              <svg class="wifi-icon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4zm0 3.5c3.78 0 7.21 1.48 9.77 3.92L12 19.14 2.23 11.42C4.79 8.98 8.22 7.5 12 7.5z"/>
-              </svg>
-              <span class="battery-pill">
-                <span class="battery-level"></span>
-              </span>
-            </span>
-          </div>
+        <!-- Bottom Navigation Bar for Parent Mode -->
+        <nav class="parent-bottom-nav" aria-label="Parent Dashboard Navigation">
+          <button class="nav-item" data-tab="time-allowances" onclick="window.switchTab('time-allowances')" id="nav-btn-limits" title="Apple Screen Time & Allowances">
+            <span class="nav-icon">⏳</span>
+            <span>Limits</span>
+          </button>
+          <button class="nav-item active" data-tab="home" onclick="window.switchTab('home')" id="nav-btn-home" title="Family Overview">
+            <span class="nav-icon">🏠</span>
+            <span>Home</span>
+          </button>
+          <button class="nav-item" data-tab="map" onclick="window.switchTab('map')" id="nav-btn-map" title="Interactive GPS Map">
+            <span class="nav-icon">🗺️</span>
+            <span>Map</span>
+          </button>
+          <button class="nav-item" data-tab="alerts" onclick="window.switchTab('alerts')" id="nav-btn-alerts" title="Safety Alerts">
+            <span class="nav-icon">🔔</span>
+            <span>Alerts</span>
+          </button>
+          <button class="nav-item" data-tab="settings" onclick="window.switchTab('settings')" id="nav-btn-settings" title="Guardian Settings">
+            <span class="nav-icon">⚙️</span>
+            <span>Settings</span>
+          </button>
+        </nav>
+      </div>
 
-          <!-- 1. Parent Guardian Dashboard Mode Container -->
-          <div id="parent-container" class="parent-view" style="display: flex;">
-            <div id="parent-content-area" class="parent-content-area">
-              <!-- Rendered dynamically by parentUI.js -->
-            </div>
-
-            <!-- Bottom Navigation Bar for Parent Mode -->
-            <nav class="parent-bottom-nav" aria-label="Parent Dashboard Navigation">
-              <button class="nav-item active" data-tab="time-allowances" onclick="window.switchTab('time-allowances')" id="nav-btn-limits" title="Apple Screen Time & Allowances">
-                <span class="nav-icon">⏳</span>
-                <span>Limits</span>
-              </button>
-              <button class="nav-item" data-tab="home" onclick="window.switchTab('home')" id="nav-btn-home" title="Family Overview">
-                <span class="nav-icon">🏠</span>
-                <span>Home</span>
-              </button>
-              <button class="nav-item" data-tab="map" onclick="window.switchTab('map')" id="nav-btn-map" title="Interactive GPS Map">
-                <span class="nav-icon">🗺️</span>
-                <span>Map</span>
-              </button>
-              <button class="nav-item" data-tab="alerts" onclick="window.switchTab('alerts')" id="nav-btn-alerts" title="Safety Alerts">
-                <span class="nav-icon">🔔</span>
-                <span>Alerts</span>
-              </button>
-              <button class="nav-item" data-tab="settings" onclick="window.switchTab('settings')" id="nav-btn-settings" title="Guardian Settings">
-                <span class="nav-icon">⚙️</span>
-                <span>Settings</span>
-              </button>
-            </nav>
-          </div>
-
-          <!-- 2. Child App Interface Mode Container -->
-          <div id="child-container" class="child-view-container" style="display: none; height: 100%;">
-            <div id="child-content-area" style="height: 100%;">
-              <!-- Rendered dynamically by childUI.js -->
-            </div>
-          </div>
-
-          <div class="phone-home-indicator"></div>
+      <!-- 2. Child App Interface Mode Container -->
+      <div id="child-container" class="child-view-container" style="display: none; height: 100%;">
+        <div id="child-content-area" style="height: 100%;">
+          <!-- Rendered dynamically by childUI.js -->
         </div>
       </div>
     </main>

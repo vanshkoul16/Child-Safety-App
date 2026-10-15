@@ -122,15 +122,6 @@ function initApp() {
       }
     });
 
-    // Toggle Device Frame Mockup class
-    const mainViewport = document.getElementById('main-viewport');
-    if (mainViewport) {
-      if (state.isDeviceFrame) {
-        mainViewport.classList.remove('full-width-mode');
-      } else {
-        mainViewport.classList.add('full-width-mode');
-      }
-    }
 
     // Audio Mute Icon
     const audioBtn = document.getElementById('audio-toggle-btn');
@@ -230,11 +221,6 @@ window.switchTab = function(tab) {
   store.update({ activeParentTab: tab });
 };
 
-window.toggleDeviceFrame = function() {
-  const current = store.get().isDeviceFrame;
-  store.update({ isDeviceFrame: !current });
-  showToast('View Toggled', !current ? 'Mobile Phone Mockup View enabled' : 'Full-width responsive view enabled', 'info');
-};
 
 window.toggleTheme = function() {
   const current = document.documentElement.getAttribute('data-theme');

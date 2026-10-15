@@ -19,7 +19,7 @@
 
 /* Bottom Navigation Bar */
 .parent-bottom-nav {
-  position: absolute;
+  position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
@@ -593,11 +593,6 @@
   flex-direction: column;
   height: calc(100vh - 128px);
   min-height: 520px;
-}
-
-.phone-mockup #tab-map.parent-tab-screen.active {
-  height: 740px !important;
-  min-height: 740px !important;
 }
 
 .map-view-container {

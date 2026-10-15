@@ -34,184 +34,23 @@
 }
 
 /* =========================================================
-   iPhone 15/16 Pro Titanium Bezel & Frame System
-   ========================================================= */
-.device-frame-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: calc(100vh - 65px);
-  padding: 1.5rem 1rem 2.5rem;
-  background: radial-gradient(circle at 50% 10%, #ffffff 0%, #edf0f5 100%);
-}
-
-.phone-mockup {
-  width: 100%;
-  max-width: 395px;
-  height: 844px;
-  background-color: var(--ios-bg);
-  border-radius: 54px;
-  border: 11px solid #202022;
-  box-shadow: 
-    0 0 0 2px #48484a,
-    0 0 0 4px #1c1c1e,
-    0 25px 65px -12px rgba(0, 0, 0, 0.35),
-    0 10px 30px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  font-family: var(--ios-font);
-  user-select: none;
-  transition: all 0.3s ease;
-}
-
-/* Dynamic Island */
-.phone-dynamic-island {
-  position: absolute;
-  top: 11px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 124px;
-  height: 35px;
-  background-color: #000000;
-  border-radius: 20px;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 11px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-  pointer-events: none;
-}
-
-.island-sensor {
-  width: 6px;
-  height: 6px;
-  background: #090a0f;
-  border-radius: 50%;
-  margin-right: 8px;
-}
-
-.island-camera {
-  width: 11px;
-  height: 11px;
-  background: radial-gradient(circle at 35% 35%, #1d2545 0%, #0d101a 60%, #000000 100%);
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* iOS Status Bar */
-.phone-status-bar {
-  padding: 13px 26px 4px 28px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ios-text-primary);
-  font-family: var(--ios-font);
-  z-index: 500;
-  line-height: 1;
-}
-
-.status-time {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.status-icons {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* 4-bar cellular signal */
-.signal-bars {
-  display: inline-flex;
-  align-items: flex-end;
-  gap: 1.5px;
-  height: 11px;
-}
-
-.signal-bars .bar {
-  width: 3px;
-  background-color: var(--ios-text-primary);
-  border-radius: 0.5px;
-}
-
-.signal-bars .bar-1 { height: 3.5px; }
-.signal-bars .bar-2 { height: 6px; }
-.signal-bars .bar-3 { height: 8.5px; }
-.signal-bars .bar-4 { height: 11px; }
-
-.wifi-icon {
-  width: 15px;
-  height: 15px;
-  color: var(--ios-text-primary);
-}
-
-/* Battery outline pill */
-.battery-pill {
-  width: 23px;
-  height: 11.5px;
-  border: 1.5px solid var(--ios-text-primary);
-  border-radius: 3.5px;
-  padding: 1.5px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin-left: 1px;
-}
-
-.battery-pill::after {
-  content: '';
-  position: absolute;
-  right: -3.5px;
-  top: 2.8px;
-  width: 1.5px;
-  height: 4px;
-  background-color: var(--ios-text-primary);
-  border-top-right-radius: 1px;
-  border-bottom-right-radius: 1px;
-}
-
-.battery-level {
-  width: 100%;
-  height: 100%;
-  background-color: var(--ios-text-primary);
-  border-radius: 1px;
-}
-
-/* Bottom Home Indicator */
-.phone-home-indicator {
-  width: 138px;
-  height: 5px;
-  background-color: var(--ios-text-primary);
-  border-radius: 100px;
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0.85;
-  z-index: 1000;
-  pointer-events: none;
-}
-
-/* =========================================================
    Apple Screen Time & Time Allowances Screen
    ========================================================= */
 .ios-time-view-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  min-height: 100%;
   background-color: var(--ios-bg);
+  border-radius: 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 24px;
+  padding-bottom: 2rem;
   position: relative;
-  scrollbar-width: none; /* Hide scrollbar for iOS native look */
+  scrollbar-width: none; /* Hide scrollbar for clean look */
 }
 
 .ios-time-view-container::-webkit-scrollbar {
@@ -752,26 +591,5 @@
   background-color: var(--ios-stepper-border);
 }
 
-/* Hide parent bottom nav on Time Allowances tab to match screenshot exactly */
-.tab-time-allowances-active .parent-bottom-nav {
-  display: none !important;
-}
 
-.tab-time-allowances-active .parent-content-area {
-  padding-bottom: 20px !important;
-}
 
-/* Responsive adjustment for small physical mobile screens */
-@media (max-width: 480px) {
-  .device-frame-container {
-    padding: 0;
-    background: none;
-  }
-  .phone-mockup {
-    max-width: 100%;
-    height: 100vh;
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-  }
-}
