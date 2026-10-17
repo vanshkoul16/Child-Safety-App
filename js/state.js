@@ -3,13 +3,14 @@
    Authentic Jammu, J&K Family Telemetry & Live GPS Geolocation
    ========================================================= */
 
-const STORAGE_KEY = 'safehaven_state_v9'; // v9 responsive layout schema
+const STORAGE_KEY = 'safehaven_state_v10'; // v10 mobile app preview toggle schema
 
 const INITIAL_STATE = {
 
   activeMode: 'parent', // 'parent' or 'child'
   activeParentTab: 'home', // 'home' | 'time-allowances' | 'map' | 'alerts' | 'zones' | 'children' | 'settings'
   selectedChildId: 'c1',
+  isMobilePreview: true, // Default to true on desktop so user can preview mobile app view immediately
   theme: 'light',
   isAudioMuted: false,
   mapStyle: 'google_streets', // 'google_streets' | 'google_hybrid' | 'google_terrain'

@@ -76,6 +76,10 @@
         </button>
 
         <!-- View Controls -->
+        <button id="view-mode-toggle-btn" class="header-view-toggle-btn active" onclick="window.toggleMobilePreview()" title="Switch between Mobile Smartphone Preview and Full Desktop View">
+          <span class="view-toggle-icon">💻</span>
+          <span class="view-toggle-label">Desktop View</span>
+        </button>
         <button id="audio-toggle-btn" class="icon-btn" title="Toggle Siren & Notification Sounds" onclick="window.toggleAudioMute()">
           🔔
         </button>
@@ -86,7 +90,7 @@
     </header>
 
     <!-- Main Viewport Shell -->
-    <main id="main-viewport" class="main-viewport">
+    <main id="main-viewport" class="main-viewport mobile-preview-mode">
       <!-- 1. Parent Guardian Dashboard Mode Container -->
       <div id="parent-container" class="parent-view" style="display: flex;">
         <div id="parent-content-area" class="parent-content-area">

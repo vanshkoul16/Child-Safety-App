@@ -257,6 +257,45 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-main);
 }
 
+/* Header View Mode Toggle Pill & Install Button */
+.header-view-toggle-btn,
+.header-install-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-main);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.header-view-toggle-btn:hover,
+.header-install-btn:hover {
+  background: var(--bg-subtle);
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+}
+
+.header-view-toggle-btn.active {
+  background: var(--primary-light, #eff6ff);
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+[data-theme="dark"] .header-view-toggle-btn.active {
+  background: rgba(37, 99, 235, 0.2);
+  border-color: #60a5fa;
+  color: #93c5fd;
+}
+
 /* Main Layout Viewport */
 .main-viewport {
   flex: 1;
@@ -293,6 +332,174 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   flex-direction: column;
 }
+
+/* =========================================================
+   Mobile App Preview Mode System
+   ========================================================= */
+.mobile-preview-mode {
+  padding: 1.5rem 1rem 3.5rem;
+  background: radial-gradient(circle at 50% 20%, #1e293b 0%, #0b1120 100%);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: calc(100vh - 65px);
+  position: relative;
+  transition: background 0.3s ease;
+}
+
+[data-theme="light"] .mobile-preview-mode {
+  background: radial-gradient(circle at 50% 20%, #e2e8f0 0%, #cbd5e1 100%);
+}
+
+.mobile-preview-mode .parent-view,
+.mobile-preview-mode .child-view-container {
+  width: 100%;
+  max-width: 400px;
+  height: 844px;
+  max-height: min(844px, calc(100vh - 120px));
+  min-height: 600px;
+  background-color: var(--bg-main);
+  border-radius: 48px;
+  border: 11px solid #1e293b;
+  box-shadow: 
+    0 0 0 2px #475569,
+    0 25px 65px -12px rgba(0, 0, 0, 0.5),
+    0 10px 30px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="light"] .mobile-preview-mode .parent-view,
+[data-theme="light"] .mobile-preview-mode .child-view-container {
+  border-color: #1e293b;
+  box-shadow: 
+    0 0 0 2px #94a3b8,
+    0 25px 65px -12px rgba(15, 23, 42, 0.35),
+    0 10px 25px rgba(15, 23, 42, 0.15);
+}
+
+/* Dynamic Island Notch Pill */
+.mobile-preview-mode .parent-view::before,
+.mobile-preview-mode .child-view-container::before {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 116px;
+  height: 28px;
+  background-color: #000000;
+  border-radius: 20px;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Home Bar Indicator */
+.mobile-preview-mode .parent-view::after,
+.mobile-preview-mode .child-view-container::after {
+  content: '';
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 134px;
+  height: 4px;
+  background-color: #000000;
+  opacity: 0.6;
+  border-radius: 100px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .mobile-preview-mode .parent-view::after,
+[data-theme="dark"] .mobile-preview-mode .child-view-container::after {
+  background-color: #ffffff;
+  opacity: 0.5;
+}
+
+/* In mobile preview, content area scrolls inside the frame */
+.mobile-preview-mode .parent-content-area {
+  max-width: 100%;
+  padding: 2.4rem 0.9rem 5.5rem;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mobile-preview-mode .child-view {
+  padding-top: 2.4rem;
+  padding-bottom: 2rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Bottom Nav docked to the bottom of the phone mockup */
+.mobile-preview-mode .parent-bottom-nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 0 0 38px 38px;
+  padding-bottom: 8px;
+  height: 68px;
+  z-index: 850;
+}
+
+/* Map sizing inside mobile preview */
+.mobile-preview-mode #tab-map.parent-tab-screen.active {
+  height: 100% !important;
+  min-height: 480px !important;
+  flex: 1;
+}
+
+/* Time Allowances tab inside mobile preview */
+.mobile-preview-mode .ios-time-view-container {
+  max-width: 100%;
+  box-shadow: none;
+  border-radius: 0;
+  background-color: transparent;
+}
+
+/* On real mobile screens (<= 600px), always render native full screen */
+@media (max-width: 600px) {
+  .mobile-preview-mode {
+    padding: 0 !important;
+    background: none !important;
+  }
+  .mobile-preview-mode .parent-view,
+  .mobile-preview-mode .child-view-container {
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    min-height: calc(100vh - 65px) !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .mobile-preview-mode .parent-view::before,
+  .mobile-preview-mode .child-view-container::before,
+  .mobile-preview-mode .parent-view::after,
+  .mobile-preview-mode .child-view-container::after {
+    display: none !important;
+  }
+  .mobile-preview-mode .parent-bottom-nav {
+    position: fixed !important;
+    border-radius: 0 !important;
+    padding-bottom: 0 !important;
+    height: 64px !important;
+  }
+  .mobile-preview-mode .parent-content-area {
+    padding-top: 1rem !important;
+  }
+  .mobile-preview-mode .child-view {
+    padding-top: 1.25rem !important;
+  }
+}
+
 
 
 

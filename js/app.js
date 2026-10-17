@@ -122,6 +122,26 @@ function initApp() {
       }
     });
 
+    // Toggle Mobile App Preview Mode
+    const mainViewport = document.getElementById('main-viewport');
+    const viewToggleBtn = document.getElementById('view-mode-toggle-btn');
+    if (mainViewport) {
+      if (state.isMobilePreview) {
+        mainViewport.classList.add('mobile-preview-mode');
+        if (viewToggleBtn) {
+          viewToggleBtn.classList.add('active');
+          viewToggleBtn.innerHTML = '<span class="view-toggle-icon">💻</span><span class="view-toggle-label">Desktop View</span>';
+          viewToggleBtn.title = 'Switch to full desktop responsive layout';
+        }
+      } else {
+        mainViewport.classList.remove('mobile-preview-mode');
+        if (viewToggleBtn) {
+          viewToggleBtn.classList.remove('active');
+          viewToggleBtn.innerHTML = '<span class="view-toggle-icon">📱</span><span class="view-toggle-label">Mobile View</span>';
+          viewToggleBtn.title = 'Preview how SafeHaven looks on a smartphone';
+        }
+      }
+    }
 
     // Audio Mute Icon
     const audioBtn = document.getElementById('audio-toggle-btn');
@@ -219,6 +239,23 @@ window.switchMode = function(mode) {
 
 window.switchTab = function(tab) {
   store.update({ activeParentTab: tab });
+};
+
+window.toggleMobilePreview = function() {
+  const current = !!store.get().isMobilePreview;
+  const next = !current;
+  store.update({ isMobilePreview: next });
+
+  // Recalculate leaflet map tiles if map tab is currently displayed
+  setTimeout(() => {
+    window.dispatchEvent(new Event('resize'));
+  }, 220);
+
+  showToast(
+    next ? '📱 Mobile App View' : '💻 Desktop View',
+    next ? 'Smartphone preview enabled — interactive mobile phone frame active' : 'Full-width desktop responsive view enabled',
+    'info'
+  );
 };
 
 
