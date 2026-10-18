@@ -106,7 +106,7 @@ function initApp() {
 
     if (state.activeMode === 'child') {
       if (parentContainer) parentContainer.style.display = 'none';
-      if (childContainer) childContainer.style.display = 'block';
+      if (childContainer) childContainer.style.display = 'flex';
     } else {
       if (childContainer) childContainer.style.display = 'none';
       if (parentContainer) parentContainer.style.display = 'flex';
