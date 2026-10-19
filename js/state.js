@@ -3,7 +3,7 @@
    Authentic Jammu, J&K Family Telemetry & Live GPS Geolocation
    ========================================================= */
 
-const STORAGE_KEY = 'safehaven_state_v10'; // v10 mobile app preview toggle schema
+const STORAGE_KEY = 'safehaven_state_v11'; // v11 updated mother to Isheta Koul
 
 const INITIAL_STATE = {
 
@@ -341,7 +341,7 @@ const INITIAL_STATE = {
     },
     emergencyContacts: [
       { name: 'Vansh Koul (Father)', phone: '+91 98765 24810', relation: 'Primary Guardian', notifySOS: true },
-      { name: 'Sunita Koul (Mother)', phone: '+91 98765 24811', relation: 'Secondary Guardian', notifySOS: true },
+      { name: 'Isheta Koul (Mother)', phone: '+91 98765 24811', relation: 'Secondary Guardian', notifySOS: true },
       { name: 'Kavita Koul (Aunt)', phone: '+91 98765 89020', relation: 'Trusted Family in Gandhi Nagar', notifySOS: true },
       { name: 'DPS Jammu Main Office', phone: '+91 191 2570480', relation: 'School Administration', notifySOS: false },
       { name: 'National Emergency Helpline (112)', phone: '112', relation: 'Police / Ambulance / Disaster Management', notifySOS: true },

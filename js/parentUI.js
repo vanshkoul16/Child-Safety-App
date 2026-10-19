@@ -1090,7 +1090,7 @@ export class ParentUI {
             <div style="display: flex; align-items: center; gap: 0.65rem;">
               <span style="font-size: 1.4rem;">👩</span>
               <div>
-                <strong style="font-size: 0.88rem;">Sunita Koul (Mother)</strong>
+                <strong style="font-size: 0.88rem;">Isheta Koul (Mother)</strong>
                 <div style="font-size: 0.72rem; color: var(--text-muted);">Secondary Guardian &bull; +91 98765 24811</div>
               </div>
             </div>

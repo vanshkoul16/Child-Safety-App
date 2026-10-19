@@ -30,7 +30,7 @@ SafeHaven is an Apple Health and modern Fintech-inspired Child Safety and Live T
 5. **⚙️ Settings & Privacy**:
    - Granular Location Sharing (*Always / Moving / SOS Only*)
    - Location History retention controls (*24h / 7d / 30d*)
-   - Authorized Guardians management (Vansh Koul - Father, Sunita Koul - Mother)
+   - Authorized Guardians management (Vansh Koul - Father, Isheta Koul - Mother)
    - Push notification, SMS, and siren preferences
    - Connected devices and anti-surveillance guarantee (zero mic/camera access)
 
