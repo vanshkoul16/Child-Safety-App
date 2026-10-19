@@ -11,5 +11,8 @@
     "node": ">=18.x"
   },
   "author": "vanshkoul16",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "mongodb": "^6.10.0"
+  }
 }

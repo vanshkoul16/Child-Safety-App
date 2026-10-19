@@ -136,3 +136,13 @@ Child-Safety-App/
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## Cloud Deployment (Vercel + MongoDB Atlas)
+
+The backend runs as Vercel serverless functions in `/api` and stores data in MongoDB Atlas.
+
+1. In Vercel > Project > Settings > Environment Variables, add `MONGODB_URI` (Atlas connection string) and `MONGODB_DB` (`safehaven`) for Production, Preview and Development.
+2. In Atlas > Network Access, allow Vercel to connect (`0.0.0.0/0`, since Vercel has no fixed IPs on the free plan).
+3. Push to `main`; Vercel redeploys automatically. Check `/api/health` — it should report `"database": "mongodb-atlas"`.
+
+Local run: copy `.env.example` to `.env`, then `vercel dev`. (`node server.js` still serves the static app, but uses the old in-memory API.)

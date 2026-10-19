@@ -1,8 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "",
+  "buildCommand": "echo static build",
   "outputDirectory": ".",
-  "installCommand": "",
   "headers": [
     {
       "source": "/sw.js",
@@ -66,8 +65,15 @@
       ]
     }
   ],
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
-  ]
+  "rewrites": [
+    {
+      "source": "/((?!api/|.*\\..*).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 10
+    }
+  }
 }
