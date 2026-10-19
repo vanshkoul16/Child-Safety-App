@@ -25,7 +25,145 @@ const MIME_TYPES = {
   '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
 
-const server = http.createServer((req, res) => {
+// Server in-memory telemetry and alert store
+const serverStore = {
+  startTime: Date.now(),
+  telemetryLogs: [],
+  activeAlerts: [],
+  serverState: null
+};
+
+// Helper to read JSON request body
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch (err) {
+        reject(err);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  // CORS Preflight Handler
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400'
+    });
+    res.end();
+    return;
+  }
+
+  // REST Backend API Endpoints
+  if (req.url.startsWith('/api/')) {
+    const apiPath = req.url.split('?')[0];
+    const jsonHeaders = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-cache, no-store, must-revalidate'
+    };
+
+    // 1. Health check & status
+    if (apiPath === '/api/health') {
+      res.writeHead(200, jsonHeaders);
+      res.end(JSON.stringify({
+        status: 'online',
+        service: 'SafeHaven Core Backend',
+        port: PORT,
+        version: '2.0.0',
+        uptimeSeconds: Math.round(process.uptime()),
+        timestamp: Date.now(),
+        activeAlertsCount: serverStore.activeAlerts.length,
+        telemetryPointsCount: serverStore.telemetryLogs.length
+      }));
+      return;
+    }
+
+    // 2. Telemetry ingestion (Child GPS & signal updates)
+    if (apiPath === '/api/telemetry' && req.method === 'POST') {
+      try {
+        const data = await readJsonBody(req);
+        data.receivedAt = Date.now();
+        serverStore.telemetryLogs.unshift(data);
+        if (serverStore.telemetryLogs.length > 200) serverStore.telemetryLogs.pop();
+        res.writeHead(200, jsonHeaders);
+        res.end(JSON.stringify({ success: true, message: 'Telemetry synchronized with backend', record: data }));
+      } catch (err) {
+        res.writeHead(400, jsonHeaders);
+        res.end(JSON.stringify({ error: 'Invalid telemetry payload' }));
+      }
+      return;
+    }
+
+    // 3. Emergency SOS broadcast
+    if (apiPath === '/api/sos' && req.method === 'POST') {
+      try {
+        const data = await readJsonBody(req);
+        data.id = 'sos-' + Date.now();
+        data.timestamp = Date.now();
+        serverStore.activeAlerts.unshift(data);
+        console.log(`🚨 [BACKEND ALERT] Emergency SOS received for ${data.childName || 'Child'}!`);
+        res.writeHead(200, jsonHeaders);
+        res.end(JSON.stringify({ success: true, alertId: data.id, message: 'Emergency SOS broadcasted by backend' }));
+      } catch (err) {
+        res.writeHead(400, jsonHeaders);
+        res.end(JSON.stringify({ error: 'Invalid SOS payload' }));
+      }
+      return;
+    }
+
+    // 4. Check-in ("I'm Safe")
+    if (apiPath === '/api/checkin' && req.method === 'POST') {
+      try {
+        const data = await readJsonBody(req);
+        data.id = 'chk-' + Date.now();
+        data.timestamp = Date.now();
+        serverStore.activeAlerts.unshift(data);
+        res.writeHead(200, jsonHeaders);
+        res.end(JSON.stringify({ success: true, message: 'Check-in recorded on server', record: data }));
+      } catch (err) {
+        res.writeHead(400, jsonHeaders);
+        res.end(JSON.stringify({ error: 'Invalid check-in payload' }));
+      }
+      return;
+    }
+
+    // 5. State Synchronization
+    if (apiPath === '/api/state') {
+      if (req.method === 'GET') {
+        res.writeHead(200, jsonHeaders);
+        res.end(JSON.stringify({ state: serverStore.serverState || null, status: 'synced' }));
+        return;
+      }
+      if (req.method === 'POST') {
+        try {
+          const body = await readJsonBody(req);
+          serverStore.serverState = body;
+          res.writeHead(200, jsonHeaders);
+          res.end(JSON.stringify({ success: true, message: 'State synced to server' }));
+        } catch (err) {
+          res.writeHead(400, jsonHeaders);
+          res.end(JSON.stringify({ error: 'Failed to sync state' }));
+        }
+        return;
+      }
+    }
+
+    // Unmatched API endpoint
+    res.writeHead(404, jsonHeaders);
+    res.end(JSON.stringify({ error: 'API route not found' }));
+    return;
+  }
+
+  // Static File Server
   let cleanUrl = decodeURIComponent(req.url.split('?')[0]);
   if (cleanUrl === '/' || cleanUrl === '') cleanUrl = '/index.html';
 

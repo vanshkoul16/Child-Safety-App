@@ -170,7 +170,50 @@ function initApp() {
 
   store.subscribe(syncViewMode);
   syncViewMode(store.get());
+
+  // Initialize Live Backend Connection & Health Status
+  initBackendSync();
 }
+
+async function initBackendSync() {
+  const badge = document.getElementById('backend-status-badge');
+  try {
+    const res = await fetch('/api/health');
+    if (res.ok) {
+      const data = await res.json();
+      console.log('✅ SafeHaven Backend Connected:', data);
+      if (badge) {
+        badge.innerHTML = '🟢 BACKEND & FRONTEND LIVE';
+        badge.style.background = 'var(--safe-bg)';
+        badge.style.color = '#047857';
+        badge.title = `Full-stack active on port ${data.port || 3000} (Uptime: ${data.uptimeSeconds}s)`;
+      }
+    } else {
+      if (badge) {
+        badge.innerHTML = '🟢 CLIENT LIVE (PWA)';
+        badge.title = 'Running in standalone client PWA mode';
+      }
+    }
+  } catch (err) {
+    if (badge) {
+      badge.innerHTML = '🟢 CLIENT LIVE (PWA)';
+      badge.title = 'Standalone offline client mode active';
+    }
+  }
+}
+
+window.syncToBackend = async function(endpoint, payload) {
+  try {
+    const res = await fetch(`/api/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+};
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initApp);
