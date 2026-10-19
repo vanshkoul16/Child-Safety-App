@@ -18,7 +18,7 @@ if %errorlevel% neq 0 (
 )
 
 echo [1/2] Launching SafeHaven Node.js Server on port 3000...
-start "" /b node server.js
+start "" /b node local-server.js
 
 :: Wait 1.5 seconds for port to open
 powershell -Command "Start-Sleep -Milliseconds 1500" >nul 2>nul
@@ -35,4 +35,4 @@ echo ========================================================
 echo.
 
 :: Keep script attached to node output or loop
-node server.js
+node local-server.js

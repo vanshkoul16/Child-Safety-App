@@ -114,7 +114,7 @@ Child-Safety-App/
 ├── vendor/
 │   └── leaflet/          # Offline Leaflet.js library & assets
 ├── index.html            # Main Single-Page Application entry
-├── server.js             # Express/Node HTTP & WebSocket/REST server
+├── local-server.js             # Express/Node HTTP & WebSocket/REST server
 ├── manifest.json         # PWA Manifest configuration
 ├── sw.js                 # Service Worker for offline caching
 ├── SYNC_GITHUB.bat       # Quick Windows batch script to sync to GitHub
@@ -145,4 +145,4 @@ The backend runs as Vercel serverless functions in `/api` and stores data in Mon
 2. In Atlas > Network Access, allow Vercel to connect (`0.0.0.0/0`, since Vercel has no fixed IPs on the free plan).
 3. Push to `main`; Vercel redeploys automatically. Check `/api/health` — it should report `"database": "mongodb-atlas"`.
 
-Local run: copy `.env.example` to `.env`, then `vercel dev`. (`node server.js` still serves the static app, but uses the old in-memory API.)
+Local run: copy `.env.example` to `.env`, then `vercel dev`. (`node local-server.js` still serves the static app, but uses the old in-memory API.)

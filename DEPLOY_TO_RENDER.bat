@@ -33,7 +33,7 @@ if "%choice%"=="2" (
     echo.
     echo [SafeHaven] Opening Render Web Service creation page...
     start "" "https://dashboard.render.com/select-repo?type=web"
-    echo Select repository "vanshkoul16/Child-Safety-App", set Build Command to "npm install", and Start Command to "node server.js".
+    echo Select repository "vanshkoul16/Child-Safety-App", set Build Command to "npm install", and Start Command to "node local-server.js".
     echo.
     pause
     exit /b
