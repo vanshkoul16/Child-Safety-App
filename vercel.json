@@ -1,6 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "echo static build",
+  "framework": null,
+  "installCommand": "npm install",
+  "buildCommand": null,
   "outputDirectory": ".",
   "headers": [
     {
