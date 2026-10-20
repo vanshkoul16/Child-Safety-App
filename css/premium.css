@@ -251,3 +251,169 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .all-clear-title { font-weight: 600; }
 .live-gps-banner { background: var(--bg-surface); background-image: none; border: 1px solid var(--border-light); border-radius: 20px; box-shadow: none; }
 .status-pill { font-weight: 600; background: transparent; }
+
+/* ---------- Navigation Bar Indicator Refinement ---------- */
+.parent-bottom-nav {
+  height: 64px;
+}
+.nav-item.active::after {
+  content: ''; position: absolute; top: 0; left: 50%; width: 24px; height: 2.5px;
+  margin-left: -12px; border-radius: 999px; background: var(--text-main);
+}
+
+/* ---------- Minimalist Child Card & Action Buttons ---------- */
+.child-card-clean {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.child-card-clean:hover {
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-sm);
+}
+
+.child-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.child-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.child-avatar-wrap {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.child-card-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--border-light);
+}
+
+.status-pulse-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  pointer-events: none;
+}
+.status-pulse-ring.safe {
+  border-color: var(--safe);
+}
+.status-pulse-ring.attention {
+  border-color: var(--attention);
+}
+.status-pulse-ring.danger {
+  border-color: var(--danger);
+  animation: ringPulse 2s infinite;
+}
+
+@keyframes ringPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.6; }
+}
+
+.child-card-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+}
+
+.child-card-grade {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.child-location-hero {
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--bg-subtle);
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
+}
+
+.child-location-main {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.child-location-detail {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.child-telemetry-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+  margin-bottom: 0.85rem;
+}
+
+.child-card-btn-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.55rem;
+  padding-top: 0.25rem;
+}
+
+.child-card-btn-row .btn-card-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  transition: all 0.15s ease;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.child-card-btn-row .btn-card-action:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-focus);
+  color: var(--text-main);
+}
+
+.child-card-btn-row .btn-card-action.primary {
+  background: var(--text-main);
+  color: var(--bg-surface);
+  border-color: var(--text-main);
+}
+
+.child-card-btn-row .btn-card-action.primary:hover {
+  opacity: 0.88;
+}
+
+/* ---------- Desktop Responsive Constraints ---------- */
+@media (min-width: 768px) {
+  :not(.mobile-preview-mode) .parent-content-area {
+    max-width: 880px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}

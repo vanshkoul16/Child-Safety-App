@@ -11,7 +11,6 @@ export class ParentUI {
     this.container = null;
     this.activeFilter = 'all';
     this.isMounted = false;
-    this.timeView = 'overview'; // 'overview' | 'categories'
   }
 
   mount(containerId = 'parent-content-area') {
@@ -19,7 +18,6 @@ export class ParentUI {
     if (!this.container) return;
 
     this.container.innerHTML = `
-      <div id="tab-time-allowances" class="parent-tab-screen" style="padding: 0; margin: 0; background: var(--bg-main); height: 100%;"></div>
       <div id="tab-home" class="parent-tab-screen"></div>
       <div id="tab-map" class="parent-tab-screen" style="padding: 0; margin: 0; height: 100%;">
         <div class="map-view-container">
@@ -98,23 +96,7 @@ export class ParentUI {
   render() {
     if (!this.container || !this.isMounted) return;
     const state = store.get();
-    const activeTab = state.activeParentTab || 'time-allowances';
-
-    if (activeTab !== 'time-allowances') this.timeView = 'overview';
-
-    // 0. Time Allowances Tab (two pages: daily limit, app categories)
-    const timeTab = document.getElementById('tab-time-allowances');
-    if (timeTab) {
-      timeTab.innerHTML = this.renderTimeAllowancesContent(state);
-    }
-
-    if (activeTab !== 'time-allowances') this.timeView = 'overview';
-
-    // Toggle active class on parent-view container to handle bottom nav hiding
-    const parentView = this.container.closest('.parent-view');
-    if (parentView) {
-      parentView.classList.toggle('tab-time-allowances-active', activeTab === 'time-allowances');
-    }
+    const activeTab = state.activeParentTab || 'home';
 
     // 1. Home Tab
     const homeTab = document.getElementById('tab-home');
@@ -212,7 +194,7 @@ export class ParentUI {
     }
 
     // 7. Toggle Active Tab visibility
-    const tabs = ['time-allowances', 'home', 'map', 'alerts', 'zones', 'children', 'settings'];
+    const tabs = ['home', 'map', 'alerts', 'zones', 'children', 'settings'];
     tabs.forEach(tab => {
       const el = document.getElementById(`tab-${tab}`);
       if (el) {
@@ -235,139 +217,6 @@ export class ParentUI {
       mapCtrl.renderLiveUserMarker();
     }
   } // end render()
-
-  /* -------------------------------------------------------------
-     APPLE SCREEN TIME & TIME ALLOWANCES METHODS
-     ------------------------------------------------------------- */
-  formatAllowanceTime(minutes) {
-    const mins = parseInt(minutes, 10) || 0;
-    if (mins === 0) return '0m';
-    const hours = Math.floor(mins / 60);
-    const remMins = mins % 60;
-    if (hours > 0 && remMins > 0) return `${hours} hr ${remMins}m`;
-    if (hours === 1) return '1 hour';
-    if (hours > 1) return `${hours} hours`;
-    return `${remMins}m`;
-  }
-
-  renderTimeAllowancesContent(state) {
-    const child = store.getChild(state.selectedChildId) || state.children[0];
-    const timeSettings = state.timeAllowances || {};
-    const childSettings = timeSettings[child.id] || timeSettings['c1'] || {
-      weekdays: { sharedAllowanceMinutes: 60, categories: { entertainment: 60, games: 60, socialMedia: 30, education: 120 } },
-      weekends: { sharedAllowanceMinutes: 120, categories: { entertainment: 90, games: 90, socialMedia: 60, education: 180 } }
-    };
-    const activeDay = timeSettings.activeDayType || 'weekdays';
-    const dayData = childSettings[activeDay] || { sharedAllowanceMinutes: 60, categories: { entertainment: 60, games: 60, socialMedia: 30 } };
-    const sharedMinutes = dayData.sharedAllowanceMinutes ?? 60;
-    const cats = dayData.categories || { entertainment: 60, games: 60, socialMedia: 30 };
-
-    const svg = (d, size = 18) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-    const icons = {
-      entertainment: svg('<circle cx="12" cy="12" r="9"/><path d="M10 8.500v7l6-3.500-6-3.500z"/>'),
-      games: svg('<rect x="2.500" y="7" width="19" height="11" rx="5"/><path d="M8 10.500v4M6 12.500h4"/><circle cx="15.500" cy="11.500" r=".6" fill="currentColor"/><circle cx="17.500" cy="13.500" r=".6" fill="currentColor"/>'),
-      socialMedia: svg('<path d="M20 12a8 8 0 0 1-11.800 7L4 20l1.100-3.900A8 8 0 1 1 20 12z"/>'),
-      education: svg('<path d="M12 4 2.500 9 12 14l9.500-5L12 4z"/><path d="M6 11.500V16c0 1.200 2.700 3 6 3s6-1.800 6-3v-4.500"/>')
-    };
-    const rows = [
-      { key: 'entertainment', name: 'Entertainment', fallback: 60 },
-      { key: 'games', name: 'Games', fallback: 60 },
-      { key: 'socialMedia', name: 'Social Media', fallback: 30 }
-    ];
-
-    const nav = `
-      <div class="ta-nav">
-        <button class="ta-back" onclick="window.leaveTimeAllowances()" aria-label="Back">
-          ${svg('<polyline points="15 18 9 12 15 6"></polyline>', 18)}
-        </button>
-        <button class="ta-child-pill" onclick="window.openChildPickerModal()" title="Switch child">
-          <img src="${child.avatar || 'assets/avatars/anaya.jpg'}" alt="" />
-          <span>${child.name}</span>
-          ${svg('<polyline points="6 9 12 15 18 9"></polyline>', 13)}
-        </button>
-      </div>`;
-
-    const dayToggle = `
-      <div class="ta-segmented" role="tablist" aria-label="Day type">
-        <button class="${activeDay === 'weekdays' ? 'active' : ''}" role="tab" aria-selected="${activeDay === 'weekdays'}" onclick="window.setTimeAllowanceDayType('weekdays')">Weekdays</button>
-        <button class="${activeDay === 'weekends' ? 'active' : ''}" role="tab" aria-selected="${activeDay === 'weekends'}" onclick="window.setTimeAllowanceDayType('weekends')">Weekends</button>
-      </div>`;
-
-    /* ---------- Page 2: app categories ---------- */
-    if (this.timeView === 'categories') {
-      return `
-        <div class="ta-page" data-view="categories">
-          ${nav}
-          <header class="ta-head">
-            <h2 class="ta-title">App categories</h2>
-            <p class="ta-sub">Give each category its own limit. The daily limit still covers all of them together.</p>
-          </header>
-          ${dayToggle}
-          <section class="ta-card ta-list">
-            ${rows.map(r => `
-              <div class="ta-row">
-                <div class="ta-tile">${icons[r.key]}</div>
-                <div class="ta-row-text">
-                  <div class="ta-row-title">${r.name}</div>
-                  <div class="ta-row-sub">Up to ${this.formatAllowanceTime(cats[r.key] ?? r.fallback)}</div>
-                </div>
-                <div class="ta-stepper">
-                  <button onclick="window.stepCategory('${child.id}', '${r.key}', -15)" aria-label="Decrease ${r.name} by 15 minutes">${svg('<path d="M6 12h12"/>', 16)}</button>
-                  <button onclick="window.stepCategory('${child.id}', '${r.key}', 15)" aria-label="Increase ${r.name} by 15 minutes">${svg('<path d="M12 6v12M6 12h12"/>', 16)}</button>
-                </div>
-              </div>`).join('')}
-            <div class="ta-row ta-row-static">
-              <div class="ta-tile ta-tile-quiet">${icons.education}</div>
-              <div class="ta-row-text">
-                <div class="ta-row-title">Education</div>
-                <div class="ta-row-sub">Always allowed</div>
-              </div>
-            </div>
-          </section>
-          <button class="ta-text-btn" onclick="window.openManageCategoriesModal()">Choose which apps are included</button>
-        </div>`;
-    }
-
-    /* ---------- Page 1: daily limit ---------- */
-    const fillPercent = ((sharedMinutes / 360) * 100).toFixed(2);
-    const over = sharedMinutes > 180;
-    return `
-      <div class="ta-page" data-view="overview">
-        ${nav}
-        <header class="ta-head">
-          <h2 class="ta-title">Screen time</h2>
-          <p class="ta-sub">How long ${child.name} can use apps and websites each day. <a href="#" class="ta-link" onclick="window.openTimeAllowancesInfo(event)">Learn more</a></p>
-        </header>
-        ${dayToggle}
-        <section class="ta-card ta-hero">
-          <div class="ta-hero-top">
-            <span class="ta-label">Daily limit</span>
-            <button class="ta-info" onclick="window.openTimeGuidanceModal()" aria-label="Screen time guidance">${svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', 18)}</button>
-          </div>
-          <div class="ta-headline" id="ta-shared-headline">${this.formatAllowanceTime(sharedMinutes)}</div>
-          <div class="ta-slider-wrap">
-            <input type="range" id="ta-shared-slider" class="ta-range" min="0" max="360" step="15" value="${sharedMinutes}"
-                   style="--fill-pct: ${fillPercent}%;" aria-label="Daily limit"
-                   oninput="window.onSharedSliderInput(this.value)" onchange="window.onSharedSliderChange(this.value)" />
-            <div class="ta-tick" style="left: 50%;"><i></i><span>3 hr</span></div>
-          </div>
-          <div class="ta-guidance ${over ? 'is-over' : ''}" id="ta-guidance-note">
-            ${svg('<circle cx="12" cy="12" r="9"/><path d="m8.500 12.200 2.400 2.400 4.600-5"/>', 15)}
-            <span>${over ? 'Above general guidance of 3 hours' : 'Within general guidance'}</span>
-          </div>
-        </section>
-        <button class="ta-card ta-nav-row" onclick="window.openTimeCategories()">
-          <div class="ta-row-text">
-            <div class="ta-row-title">App categories</div>
-            <div class="ta-row-sub">Limits per category</div>
-          </div>
-          <div class="ta-chips">
-            <span>${icons.entertainment}</span><span>${icons.games}</span><span>${icons.socialMedia}</span>
-          </div>
-          ${svg('<polyline points="9 18 15 12 9 6"></polyline>', 16)}
-        </button>
-      </div>`;
-  }
 
   /* -------------------------------------------------------------
      HOME TAB CONTENT
@@ -554,19 +403,19 @@ export class ParentUI {
           <span>${child.gpsAccuracy}</span>
         </div>
 
-        <!-- Actions: [ Screen Time ] [ View Map ] [ Call ] [ Directions ] -->
+        <!-- Actions: [ View Map ] [ Call ] [ Directions ] -->
         <div class="child-card-btn-row">
-          <button class="btn-card-action primary" onclick="window.switchTab('time-allowances')" title="Screen Time & Category Allowances">
-            Screen time
+          <button class="btn-card-action primary" onclick="window.locateChild('${child.id}')" title="Locate ${child.name} on Live Map">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+            <span>Live Map</span>
           </button>
-          <button class="btn-card-action" onclick="window.locateChild('${child.id}')" title="View child on Google Maps">
-            Map
+          <button class="btn-card-action" onclick="window.callChildPhone('${child.name}')" title="Call ${child.name}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            <span>Call</span>
           </button>
-          <button class="btn-card-action" onclick="window.callChildPhone('${child.name}')" title="Call child's phone">
-            Call
-          </button>
-          <button class="btn-card-action" onclick="window.navigateToChild('${child.id}')" title="Driving directions from Guardian">
-            Directions
+          <button class="btn-card-action" onclick="window.navigateToChild('${child.id}')" title="Driving directions to ${child.name}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            <span>Directions</span>
           </button>
         </div>
       </div>

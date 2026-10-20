@@ -3,12 +3,12 @@
    Authentic Jammu, J&K Family Telemetry & Live GPS Geolocation
    ========================================================= */
 
-const STORAGE_KEY = 'safehaven_state_v11'; // v11 updated mother to Isheta Koul
+const STORAGE_KEY = 'safehaven_state_v12';
 
 const INITIAL_STATE = {
 
   activeMode: 'parent', // 'parent' or 'child'
-  activeParentTab: 'home', // 'home' | 'time-allowances' | 'map' | 'alerts' | 'zones' | 'children' | 'settings'
+  activeParentTab: 'home', // 'home' | 'map' | 'alerts' | 'zones' | 'children' | 'settings'
   selectedChildId: 'c1',
   isMobilePreview: true, // Default to true on desktop so user can preview mobile app view immediately
   theme: 'light',
