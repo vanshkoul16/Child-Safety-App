@@ -11,6 +11,7 @@ export class ParentUI {
     this.container = null;
     this.activeFilter = 'all';
     this.isMounted = false;
+    this.timeView = 'overview'; // 'overview' | 'categories'
   }
 
   mount(containerId = 'parent-content-area') {
@@ -18,7 +19,7 @@ export class ParentUI {
     if (!this.container) return;
 
     this.container.innerHTML = `
-      <div id="tab-time-allowances" class="parent-tab-screen" style="padding: 0; margin: 0; background: var(--ios-bg, #f2f2f7); height: 100%;"></div>
+      <div id="tab-time-allowances" class="parent-tab-screen" style="padding: 0; margin: 0; background: var(--bg-main); height: 100%;"></div>
       <div id="tab-home" class="parent-tab-screen"></div>
       <div id="tab-map" class="parent-tab-screen" style="padding: 0; margin: 0; height: 100%;">
         <div class="map-view-container">
@@ -99,11 +100,15 @@ export class ParentUI {
     const state = store.get();
     const activeTab = state.activeParentTab || 'time-allowances';
 
-    // 0. Time Allowances Tab (Apple iOS Screen Time Interface)
+    if (activeTab !== 'time-allowances') this.timeView = 'overview';
+
+    // 0. Time Allowances Tab (two pages: daily limit, app categories)
     const timeTab = document.getElementById('tab-time-allowances');
     if (timeTab) {
       timeTab.innerHTML = this.renderTimeAllowancesContent(state);
     }
+
+    if (activeTab !== 'time-allowances') this.timeView = 'overview';
 
     // Toggle active class on parent-view container to handle bottom nav hiding
     const parentView = this.container.closest('.parent-view');
@@ -256,205 +261,112 @@ export class ParentUI {
     const dayData = childSettings[activeDay] || { sharedAllowanceMinutes: 60, categories: { entertainment: 60, games: 60, socialMedia: 30 } };
     const sharedMinutes = dayData.sharedAllowanceMinutes ?? 60;
     const cats = dayData.categories || { entertainment: 60, games: 60, socialMedia: 30 };
+
+    const svg = (d, size = 18) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    const icons = {
+      entertainment: svg('<circle cx="12" cy="12" r="9"/><path d="M10 8.500v7l6-3.500-6-3.500z"/>'),
+      games: svg('<rect x="2.500" y="7" width="19" height="11" rx="5"/><path d="M8 10.500v4M6 12.500h4"/><circle cx="15.500" cy="11.500" r=".6" fill="currentColor"/><circle cx="17.500" cy="13.500" r=".6" fill="currentColor"/>'),
+      socialMedia: svg('<path d="M20 12a8 8 0 0 1-11.800 7L4 20l1.100-3.900A8 8 0 1 1 20 12z"/>'),
+      education: svg('<path d="M12 4 2.500 9 12 14l9.500-5L12 4z"/><path d="M6 11.500V16c0 1.200 2.700 3 6 3s6-1.800 6-3v-4.500"/>')
+    };
+    const rows = [
+      { key: 'entertainment', name: 'Entertainment', fallback: 60 },
+      { key: 'games', name: 'Games', fallback: 60 },
+      { key: 'socialMedia', name: 'Social Media', fallback: 30 }
+    ];
+
+    const nav = `
+      <div class="ta-nav">
+        <button class="ta-back" onclick="window.leaveTimeAllowances()" aria-label="Back">
+          ${svg('<polyline points="15 18 9 12 15 6"></polyline>', 18)}
+        </button>
+        <button class="ta-child-pill" onclick="window.openChildPickerModal()" title="Switch child">
+          <img src="${child.avatar || 'assets/avatars/anaya.jpg'}" alt="" />
+          <span>${child.name}</span>
+          ${svg('<polyline points="6 9 12 15 18 9"></polyline>', 13)}
+        </button>
+      </div>`;
+
+    const dayToggle = `
+      <div class="ta-segmented" role="tablist" aria-label="Day type">
+        <button class="${activeDay === 'weekdays' ? 'active' : ''}" role="tab" aria-selected="${activeDay === 'weekdays'}" onclick="window.setTimeAllowanceDayType('weekdays')">Weekdays</button>
+        <button class="${activeDay === 'weekends' ? 'active' : ''}" role="tab" aria-selected="${activeDay === 'weekends'}" onclick="window.setTimeAllowanceDayType('weekends')">Weekends</button>
+      </div>`;
+
+    /* ---------- Page 2: app categories ---------- */
+    if (this.timeView === 'categories') {
+      return `
+        <div class="ta-page" data-view="categories">
+          ${nav}
+          <header class="ta-head">
+            <h2 class="ta-title">App categories</h2>
+            <p class="ta-sub">Give each category its own limit. The daily limit still covers all of them together.</p>
+          </header>
+          ${dayToggle}
+          <section class="ta-card ta-list">
+            ${rows.map(r => `
+              <div class="ta-row">
+                <div class="ta-tile">${icons[r.key]}</div>
+                <div class="ta-row-text">
+                  <div class="ta-row-title">${r.name}</div>
+                  <div class="ta-row-sub">Up to ${this.formatAllowanceTime(cats[r.key] ?? r.fallback)}</div>
+                </div>
+                <div class="ta-stepper">
+                  <button onclick="window.stepCategory('${child.id}', '${r.key}', -15)" aria-label="Decrease ${r.name} by 15 minutes">${svg('<path d="M6 12h12"/>', 16)}</button>
+                  <button onclick="window.stepCategory('${child.id}', '${r.key}', 15)" aria-label="Increase ${r.name} by 15 minutes">${svg('<path d="M12 6v12M6 12h12"/>', 16)}</button>
+                </div>
+              </div>`).join('')}
+            <div class="ta-row ta-row-static">
+              <div class="ta-tile ta-tile-quiet">${icons.education}</div>
+              <div class="ta-row-text">
+                <div class="ta-row-title">Education</div>
+                <div class="ta-row-sub">Always allowed</div>
+              </div>
+            </div>
+          </section>
+          <button class="ta-text-btn" onclick="window.openManageCategoriesModal()">Choose which apps are included</button>
+        </div>`;
+    }
+
+    /* ---------- Page 1: daily limit ---------- */
     const fillPercent = ((sharedMinutes / 360) * 100).toFixed(2);
-
+    const over = sharedMinutes > 180;
     return `
-      <div class="ios-time-view-container">
-        <!-- Top iOS Navigation Bar with Circular Back Button -->
-        <div class="ios-time-nav-bar">
-          <button class="ios-back-btn" onclick="window.switchTab('home')" title="Back to Family Overview" aria-label="Back">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
-          </button>
-          
-          <div class="ios-child-picker-pill" onclick="window.openChildPickerModal()" title="Switch Child (Current: ${child.name})">
-            <img src="${child.avatar || 'assets/avatars/anaya.jpg'}" alt="${child.name}" class="ios-child-avatar-mini" />
-            <span class="ios-child-picker-name">${child.name}</span>
-            <span class="ios-child-picker-arrow">▾</span>
+      <div class="ta-page" data-view="overview">
+        ${nav}
+        <header class="ta-head">
+          <h2 class="ta-title">Screen time</h2>
+          <p class="ta-sub">How long ${child.name} can use apps and websites each day. <a href="#" class="ta-link" onclick="window.openTimeAllowancesInfo(event)">Learn more</a></p>
+        </header>
+        ${dayToggle}
+        <section class="ta-card ta-hero">
+          <div class="ta-hero-top">
+            <span class="ta-label">Daily limit</span>
+            <button class="ta-info" onclick="window.openTimeGuidanceModal()" aria-label="Screen time guidance">${svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', 18)}</button>
           </div>
-        </div>
-
-        <!-- Card 1: Time Allowances Feature Card -->
-        <div class="ios-card ios-intro-card">
-          <!-- Orange Squircle Hourglass Badge -->
-          <div class="ios-hourglass-badge">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 22h14"></path>
-              <path d="M5 2h14"></path>
-              <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path>
-              <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path>
-            </svg>
+          <div class="ta-headline" id="ta-shared-headline">${this.formatAllowanceTime(sharedMinutes)}</div>
+          <div class="ta-slider-wrap">
+            <input type="range" id="ta-shared-slider" class="ta-range" min="0" max="360" step="15" value="${sharedMinutes}"
+                   style="--fill-pct: ${fillPercent}%;" aria-label="Daily limit"
+                   oninput="window.onSharedSliderInput(this.value)" onchange="window.onSharedSliderChange(this.value)" />
+            <div class="ta-tick" style="left: 50%;"><i></i><span>3 hr</span></div>
           </div>
-
-          <h2 class="ios-card-title">Time Allowances</h2>
-          
-          <p class="ios-card-subtitle">
-            Set how long ${child.name} can use categories of apps and websites. 
-            <a href="#" class="ios-learn-more-link" onclick="window.openTimeAllowancesInfo(event)">Learn more...</a>
-          </p>
-
-          <div class="ios-hairline-divider"></div>
-
-          <!-- Manage Categories Row -->
-          <div class="ios-manage-categories-row" onclick="window.openManageCategoriesModal()">
-            <span class="ios-row-label">Manage Categories</span>
-            <div class="ios-row-right">
-              <div class="ios-category-badge-cluster">
-                <span class="cat-chip chip-entertainment" title="Entertainment">🍿</span>
-                <span class="cat-chip chip-games" title="Games">🚀</span>
-                <span class="cat-chip chip-social" title="Social Media">💬</span>
-                <span class="cat-chip chip-education" title="Education & Productivity">🎒</span>
-              </div>
-              <svg class="ios-chevron-right" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-            </div>
+          <div class="ta-guidance ${over ? 'is-over' : ''}" id="ta-guidance-note">
+            ${svg('<circle cx="12" cy="12" r="9"/><path d="m8.500 12.200 2.400 2.400 4.600-5"/>', 15)}
+            <span>${over ? 'Above general guidance of 3 hours' : 'Within general guidance'}</span>
           </div>
-        </div>
-
-        <!-- Segmented Control: Weekdays vs Weekends -->
-        <div class="ios-segmented-control" role="tablist">
-          <button class="ios-segment-btn ${activeDay === 'weekdays' ? 'active' : ''}" 
-                  onclick="window.setTimeAllowanceDayType('weekdays')" role="tab">
-            Weekdays
-          </button>
-          <button class="ios-segment-btn ${activeDay === 'weekends' ? 'active' : ''}" 
-                  onclick="window.setTimeAllowanceDayType('weekends')" role="tab">
-            Weekends
-          </button>
-        </div>
-
-        <!-- Section Header -->
-        <div class="ios-section-header">Shared Time Allowance</div>
-
-        <!-- Card 2: Shared Allowance & Category Limits -->
-        <div class="ios-card ios-allowance-card">
-          <!-- Info Circle Button Top-Right -->
-          <button class="ios-info-btn" onclick="window.openTimeGuidanceModal()" title="Screen Time Guidance Guidelines">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
-            </svg>
-          </button>
-
-          <!-- Large Dynamic Time Display -->
-          <div class="ios-allowance-headline" id="ios-shared-headline">
-            ${this.formatAllowanceTime(sharedMinutes)}
+        </section>
+        <button class="ta-card ta-nav-row" onclick="window.openTimeCategories()">
+          <div class="ta-row-text">
+            <div class="ta-row-title">App categories</div>
+            <div class="ta-row-sub">Limits per category</div>
           </div>
-
-          <!-- Slider Container -->
-          <div class="ios-slider-container">
-            <div class="ios-slider-track-wrap">
-              <input type="range" 
-                     id="ios-shared-slider" 
-                     class="ios-range-slider" 
-                     min="0" 
-                     max="360" 
-                     step="15" 
-                     value="${sharedMinutes}" 
-                     style="--fill-pct: ${fillPercent}%;"
-                     oninput="window.onSharedSliderInput(this.value)" 
-                     onchange="window.onSharedSliderChange(this.value)" />
-              
-              <!-- 3 hr Tick Marker & Label -->
-              <div class="ios-slider-tick-marker" style="left: 50%;">
-                <div class="ios-tick-notch"></div>
-                <span class="ios-tick-label">3 hr</span>
-              </div>
-            </div>
-
-            <!-- Guidance Status Badge -->
-            <div class="ios-guidance-pill" id="ios-guidance-pill">
-              ${sharedMinutes <= 180 ? `
-                <span class="guidance-check-icon">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polyline points="9 12 11.5 14.5 15.5 9.5"></polyline>
-                  </svg>
-                </span>
-                <span>Within General Guidance</span>
-              ` : `
-                <span style="font-size: 14px;">⚠️</span>
-                <span style="color: #f59e0b; font-weight: 600;">Above General Guidance (3 hr recommended)</span>
-              `}
-            </div>
+          <div class="ta-chips">
+            <span>${icons.entertainment}</span><span>${icons.games}</span><span>${icons.socialMedia}</span>
           </div>
-
-          <div class="ios-hairline-divider" style="margin-top: 18px; margin-bottom: 6px;"></div>
-
-          <!-- Category Stepper Rows List -->
-          <div class="ios-category-rows-list">
-
-            <!-- 1. Entertainment -->
-            <div class="ios-category-row">
-              <div class="ios-category-left">
-                <div class="ios-cat-icon-squircle cat-squircle-entertainment">
-                  <span>🍿</span>
-                </div>
-                <div class="ios-cat-text">
-                  <div class="ios-cat-name">Entertainment</div>
-                  <div class="ios-cat-limit" id="limit-entertainment-text">
-                    Up to ${this.formatAllowanceTime(cats.entertainment ?? 60)}
-                  </div>
-                </div>
-              </div>
-              <div class="ios-stepper">
-                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'entertainment', -15)" title="Decrease 15 min">–</button>
-                <div class="ios-stepper-divider"></div>
-                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'entertainment', 15)" title="Increase 15 min">+</button>
-              </div>
-            </div>
-
-            <div class="ios-row-hairline"></div>
-
-            <!-- 2. Games -->
-            <div class="ios-category-row">
-              <div class="ios-category-left">
-                <div class="ios-cat-icon-squircle cat-squircle-games">
-                  <span>🚀</span>
-                </div>
-                <div class="ios-cat-text">
-                  <div class="ios-cat-name">Games</div>
-                  <div class="ios-cat-limit" id="limit-games-text">
-                    Up to ${this.formatAllowanceTime(cats.games ?? 60)}
-                  </div>
-                </div>
-              </div>
-              <div class="ios-stepper">
-                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'games', -15)" title="Decrease 15 min">–</button>
-                <div class="ios-stepper-divider"></div>
-                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'games', 15)" title="Increase 15 min">+</button>
-              </div>
-            </div>
-
-            <div class="ios-row-hairline"></div>
-
-            <!-- 3. Social Media -->
-            <div class="ios-category-row">
-              <div class="ios-category-left">
-                <div class="ios-cat-icon-squircle cat-squircle-social">
-                  <span>💬</span>
-                </div>
-                <div class="ios-cat-text">
-                  <div class="ios-cat-name">Social Media</div>
-                  <div class="ios-cat-limit" id="limit-socialMedia-text">
-                    Up to ${this.formatAllowanceTime(cats.socialMedia ?? 30)}
-                  </div>
-                </div>
-              </div>
-              <div class="ios-stepper">
-                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'socialMedia', -15)" title="Decrease 15 min">–</button>
-                <div class="ios-stepper-divider"></div>
-                <button class="ios-stepper-btn" onclick="window.stepCategory('${child.id}', 'socialMedia', 15)" title="Increase 15 min">+</button>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </div>
-    `;
+          ${svg('<polyline points="9 18 15 12 9 6"></polyline>', 16)}
+        </button>
+      </div>`;
   }
 
   /* -------------------------------------------------------------
@@ -500,34 +412,33 @@ export class ParentUI {
       <div class="home-health-header">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <div>
-            <h1 class="home-health-greeting">${timeGreeting} 👋</h1>
+            <h1 class="home-health-greeting">${timeGreeting}, ${guardianName}</h1>
             <p class="home-health-subtitle">Here's your family's safety</p>
           </div>
           <button class="gmail-pill-account-btn" onclick="window.openGmailLoginModal()" title="Gmail Guardian Account">
-            <span class="gmail-g-tag">G</span>
-            <span class="gmail-switch-label">${guardianName}</span>
+            <span class="gmail-g-tag">${guardianName.charAt(0)}</span>
           </button>
         </div>
 
         <!-- Family Safety Summary Pills (Fintech Dashboard Badges) -->
         <div class="safety-summary-pills-row">
           <div class="safety-summary-pill safe" onclick="window.switchTab('children')" title="View safe children">
-            <span>🟢</span>
+            <i class="sdot"></i>
             <span>${safeCount} Safe</span>
           </div>
           <div class="safety-summary-pill attention" onclick="window.switchTab('alerts')" title="View attention alerts">
-            <span>🟡</span>
-            <span>${attentionCount} Attention</span>
+            <i class="sdot"></i>
+            <span>${attentionCount} Needs attention</span>
           </div>
           ${dangerCount > 0 ? `
             <div class="safety-summary-pill danger" onclick="window.switchTab('alerts')" title="Emergency alerts active">
-              <span>🔴</span>
+              <i class="sdot"></i>
               <span>${dangerCount} Emergency</span>
             </div>
           ` : ''}
           ${unknownCount > 0 ? `
             <div class="safety-summary-pill unknown" onclick="window.switchTab('children')" title="Offline devices">
-              <span>⚪</span>
+              <i class="sdot"></i>
               <span>${unknownCount} Offline</span>
             </div>
           ` : ''}
@@ -538,7 +449,7 @@ export class ParentUI {
       ${(activeAttentionAlert || attentionChild) ? `
         <div class="urgent-attention-card ${dangerCount > 0 ? 'danger' : 'attention'}">
           <div class="urgent-badge-row">
-            <span class="urgent-tag">${dangerCount > 0 ? '🔴 Emergency' : '⚠️ Attention'}</span>
+            <span class="urgent-tag">${dangerCount > 0 ? 'Emergency' : 'Needs attention'}</span>
             <span class="urgent-time">${this._timeAgo(activeAttentionAlert ? activeAttentionAlert.timestamp : (attentionChild ? attentionChild.lastUpdated : Date.now()))}</span>
           </div>
           <div class="urgent-message">
@@ -555,9 +466,9 @@ export class ParentUI {
         </div>
       ` : `
         <div class="all-clear-banner">
-          <span class="all-clear-icon">✨</span>
+          <i class="sdot sdot-lg"></i>
           <div>
-            <div class="all-clear-title">All Children Are Safe</div>
+            <div class="all-clear-title">Everyone is safe</div>
             <div class="all-clear-desc">Every family member is inside verified safe zones with strong battery.</div>
           </div>
         </div>
@@ -571,7 +482,7 @@ export class ParentUI {
       <!-- 4. Quick Live Hardware GPS Banner -->
       <div class="live-gps-banner ${state.userLiveLocation ? 'active' : ''}" style="margin-top: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.65rem;">
-          <span style="font-size: 1.35rem;">📍</span>
+          
           <div>
             <div style="font-size: 0.82rem; font-weight: 800; color: var(--text-main);">
               ${state.userLiveLocation ? `Live Device GPS Active (±${state.userLiveLocation.accuracy}m)` : 'Real Device GPS Available'}
@@ -582,7 +493,7 @@ export class ParentUI {
           </div>
         </div>
         <button class="btn btn-primary" style="font-size: 0.74rem; padding: 0.4rem 0.8rem; white-space: nowrap;" onclick="window.useMyCurrentLocation()">
-          ${state.userLiveLocation ? '🔄 Refresh GPS' : '📍 Use My Location'}
+          ${state.userLiveLocation ? 'Refresh GPS' : 'Use my location'}
         </button>
       </div>
     `;
@@ -590,20 +501,20 @@ export class ParentUI {
 
   _renderChildCard(child, state) {
     let statusClass = 'safe';
-    let statusBadgeText = '🟢 Safe';
+    let statusBadgeText = 'Safe';
     if (child.safetyStatus === 'attention') {
       statusClass = 'attention';
-      statusBadgeText = '🟡 Attention';
+      statusBadgeText = 'Needs attention';
     } else if (child.safetyStatus === 'danger') {
       statusClass = 'danger';
-      statusBadgeText = '🔴 Emergency';
+      statusBadgeText = 'Emergency';
     } else if (child.safetyStatus === 'unknown') {
       statusClass = 'unknown';
-      statusBadgeText = '⚪ Offline';
+      statusBadgeText = 'Offline';
     }
 
     const zone = state.safeZones.find(z => z.id === child.currentZoneId);
-    const locationCategory = zone ? (zone.type === 'school' ? '🏫 At School' : zone.type === 'home' ? '🏠 At Home' : '🛡️ In Safe Zone') : '📍 Outside Safe Zone';
+    const locationCategory = zone ? (zone.type === 'school' ? 'At school' : zone.type === 'home' ? 'At home' : 'In a safe zone') : 'Outside safe zones';
     const locationName = zone ? zone.name : (child.activity || 'Outside Safe Zones');
     const childGenderIcon = child.gender === 'F' ? '👧' : '👦';
 
@@ -617,7 +528,7 @@ export class ParentUI {
               <img src="${child.avatar}" alt="${child.name}" class="child-card-avatar" />
             </div>
             <div>
-              <div class="child-card-name">${childGenderIcon} ${child.name}</div>
+              <div class="child-card-name">${child.name}</div>
               <div class="child-card-grade">${child.grade}</div>
             </div>
           </div>
@@ -634,28 +545,28 @@ export class ParentUI {
 
         <!-- Telemetry: Battery + Last Update -->
         <div class="child-telemetry-strip">
-          <span title="${child.batteryDetail || ''}">🔋 ${child.battery}%</span>
+          <span title="${child.batteryDetail || ''}">${child.battery}% battery</span>
           <span>&bull;</span>
-          <span>📍 Updated ${this._timeAgo(child.lastUpdated)}</span>
+          <span>Updated ${this._timeAgo(child.lastUpdated)}</span>
           <span>&bull;</span>
-          <span>📶 ${child.signal}</span>
+          <span>${child.signal} signal</span>
           <span>&bull;</span>
-          <span>🛰️ ${child.gpsAccuracy}</span>
+          <span>${child.gpsAccuracy}</span>
         </div>
 
         <!-- Actions: [ Screen Time ] [ View Map ] [ Call ] [ Directions ] -->
         <div class="child-card-btn-row">
           <button class="btn-card-action primary" onclick="window.switchTab('time-allowances')" title="Screen Time & Category Allowances">
-            ⏳ Limits
+            Screen time
           </button>
           <button class="btn-card-action" onclick="window.locateChild('${child.id}')" title="View child on Google Maps">
-            🗺️ Map
+            Map
           </button>
           <button class="btn-card-action" onclick="window.callChildPhone('${child.name}')" title="Call child's phone">
-            📞 Call
+            Call
           </button>
           <button class="btn-card-action" onclick="window.navigateToChild('${child.id}')" title="Driving directions from Guardian">
-            🧭 Directions
+            Directions
           </button>
         </div>
       </div>

@@ -10,6 +10,14 @@ import { soundFx } from './audioNotifier.js';
 import { safetyEngine } from './safetyEngine.js';
 import { simulator } from './simulator.js';
 
+
+// Header line icons (shared by the render loop below)
+const _svg = (d) => `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON_DESKTOP = _svg('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>');
+const ICON_PHONE = _svg('<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>');
+const ICON_SOUND_ON = _svg('<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.500a8 8 0 0 1 0 11"/>');
+const ICON_SOUND_OFF = _svg('<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m16 9.500 5 5M21 9.500l-5 5"/>');
+
 // Global Toast System
 export function showToast(title, message, type = 'info') {
   const container = document.getElementById('toast-container');
@@ -130,14 +138,14 @@ function initApp() {
         mainViewport.classList.add('mobile-preview-mode');
         if (viewToggleBtn) {
           viewToggleBtn.classList.add('active');
-          viewToggleBtn.innerHTML = '<span class="view-toggle-icon">💻</span><span class="view-toggle-label">Desktop View</span>';
+          viewToggleBtn.innerHTML = ICON_DESKTOP;
           viewToggleBtn.title = 'Switch to full desktop responsive layout';
         }
       } else {
         mainViewport.classList.remove('mobile-preview-mode');
         if (viewToggleBtn) {
           viewToggleBtn.classList.remove('active');
-          viewToggleBtn.innerHTML = '<span class="view-toggle-icon">📱</span><span class="view-toggle-label">Mobile View</span>';
+          viewToggleBtn.innerHTML = ICON_PHONE;
           viewToggleBtn.title = 'Preview how SafeHaven looks on a smartphone';
         }
       }
@@ -146,7 +154,7 @@ function initApp() {
     // Audio Mute Icon
     const audioBtn = document.getElementById('audio-toggle-btn');
     if (audioBtn) {
-      audioBtn.innerHTML = state.isAudioMuted ? '🔇' : '🔔';
+      audioBtn.innerHTML = state.isAudioMuted ? ICON_SOUND_OFF : ICON_SOUND_ON;
     }
 
     // Gmail Header Display
@@ -154,7 +162,7 @@ function initApp() {
     const gmailBtn = document.getElementById('gmail-auth-btn');
     if (gmailDisplay) {
       const isAuth = state.auth && state.auth.isAuthenticated;
-      gmailDisplay.textContent = isAuth ? state.auth.email : 'Sign In with Gmail';
+      gmailDisplay.textContent = isAuth ? state.auth.email : 'Sign in';
       if (gmailBtn) {
         if (isAuth) {
           gmailBtn.classList.remove('unauthenticated');
@@ -1085,36 +1093,37 @@ function formatMinutesDisplay(minutes) {
 
 window.onSharedSliderInput = function(val) {
   const minutes = parseInt(val, 10) || 0;
-  const headline = document.getElementById('ios-shared-headline');
-  if (headline) {
-    headline.innerText = formatMinutesDisplay(minutes);
-  }
+  const headline = document.getElementById('ta-shared-headline');
+  if (headline) headline.textContent = formatMinutesDisplay(minutes);
 
-  const slider = document.getElementById('ios-shared-slider');
-  if (slider) {
-    const pct = ((minutes / 360) * 100).toFixed(2);
-    slider.style.setProperty('--fill-pct', `${pct}%`);
-  }
+  const slider = document.getElementById('ta-shared-slider');
+  if (slider) slider.style.setProperty('--fill-pct', `${((minutes / 360) * 100).toFixed(2)}%`);
 
-  const pill = document.getElementById('ios-guidance-pill');
-  if (pill) {
-    if (minutes <= 180) {
-      pill.innerHTML = `
-        <span class="guidance-check-icon">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="9 12 11.5 14.5 15.5 9.5"></polyline>
-          </svg>
-        </span>
-        <span>Within General Guidance</span>
-      `;
-    } else {
-      pill.innerHTML = `
-        <span style="font-size: 14px;">⚠️</span>
-        <span style="color: #f59e0b; font-weight: 600;">Above General Guidance (3 hr recommended)</span>
-      `;
-    }
+  const note = document.getElementById('ta-guidance-note');
+  if (note) {
+    const over = minutes > 180;
+    note.classList.toggle('is-over', over);
+    note.querySelector('span').textContent = over
+      ? 'Above general guidance of 3 hours'
+      : 'Within general guidance';
   }
+};
+
+window.openTimeCategories = function() {
+  parentUI.timeView = 'categories';
+  parentUI.render();
+  const el = document.getElementById('tab-time-allowances');
+  if (el) el.scrollTop = 0;
+};
+
+window.closeTimeCategories = function() {
+  parentUI.timeView = 'overview';
+  parentUI.render();
+};
+
+window.leaveTimeAllowances = function() {
+  if (parentUI.timeView === 'categories') return window.closeTimeCategories();
+  window.switchTab('home');
 };
 
 window.onSharedSliderChange = function(val) {
