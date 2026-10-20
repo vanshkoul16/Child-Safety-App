@@ -8,15 +8,23 @@ import { childUI } from './childUI.js';
 import { mapCtrl } from './mapController.js';
 import { soundFx } from './audioNotifier.js';
 import { safetyEngine } from './safetyEngine.js';
-import { simulator } from './simulator.js';
+import { icon, zoneIcon, clean } from './icons.js';
 
+const TOAST_ICONS = { info: 'info', critical: 'siren', warning: 'alert', safe: 'checkCircle' };
 
-// Header line icons (shared by the render loop below)
-const _svg = (d) => `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-const ICON_DESKTOP = _svg('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>');
-const ICON_PHONE = _svg('<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>');
-const ICON_SOUND_ON = _svg('<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.500a8 8 0 0 1 0 11"/>');
-const ICON_SOUND_OFF = _svg('<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m16 9.500 5 5M21 9.500l-5 5"/>');
+const esc = (str) => String(str == null ? '' : str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* System (push) notification for new alerts, when the guardian has turned it on */
+function pushNotify(title, body, tag) {
+  const n = store.get().settings.notifications;
+  if (!n.push || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const opts = { body, tag, icon: 'assets/icons/icon-192.png', badge: 'assets/icons/icon-192.png' };
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready.then(reg => reg.showNotification(title, opts)).catch(() => {});
+  } else {
+    try { new Notification(title, opts); } catch (e) { /* some browsers only allow SW notifications */ }
+  }
+}
 
 // Global Toast System
 export function showToast(title, message, type = 'info') {
@@ -24,189 +32,190 @@ export function showToast(title, message, type = 'info') {
   if (!container) return;
 
   const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-
-  let icon = 'ℹ️';
-  if (type === 'critical') icon = '🚨';
-  if (type === 'warning') icon = '⚠️';
-  if (type === 'safe') icon = '✅';
-
+  toast.className = `toast toast--${type}`;
+  toast.setAttribute('role', type === 'critical' ? 'alert' : 'status');
   toast.innerHTML = `
-    <div class="toast-icon">${icon}</div>
-    <div class="toast-content">
-      <div class="toast-title">${title}</div>
-      <div class="toast-message">${message}</div>
-      <div class="toast-time">Just now</div>
+    <span class="toast__icon">${icon(TOAST_ICONS[type] || 'info', 17)}</span>
+    <div class="toast__body">
+      <div class="toast__title">${clean(title)}</div>
+      <div class="toast__msg">${clean(message)}</div>
     </div>
-    <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+    <button class="toast__close" aria-label="Dismiss notification">${icon('x', 15)}</button>
   `;
 
+  const dismiss = () => {
+    if (!toast.parentElement) return;
+    toast.classList.add('is-leaving');
+    setTimeout(() => toast.remove(), 220);
+  };
+  toast.querySelector('.toast__close').addEventListener('click', dismiss);
+
   container.appendChild(toast);
+  while (container.children.length > 4) container.firstElementChild.remove();
 
   if (type === 'critical') soundFx.playWarningBeep();
   else if (type === 'safe') soundFx.playSafeChime();
   else soundFx.playPing();
 
-  setTimeout(() => {
-    if (toast.parentElement) {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(40px)';
-      setTimeout(() => toast.remove(), 250);
-    }
-  }, 4500);
+  setTimeout(dismiss, 4500);
 }
 window.showToast = showToast;
 
 // Global Modal Controller
-export function openModal(title, bodyHtml, footerHtml = '') {
-  let modalOverlay = document.getElementById('global-modal-overlay');
-  if (!modalOverlay) {
-    modalOverlay = document.createElement('div');
-    modalOverlay.id = 'global-modal-overlay';
-    modalOverlay.className = 'modal-overlay';
-    document.body.appendChild(modalOverlay);
+export function openModal(title, bodyHtml, footerHtml = '', opts = {}) {
+  let overlay = document.getElementById('global-modal-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'global-modal-overlay';
+    overlay.className = 'modal-overlay';
+    overlay.addEventListener('mousedown', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+    document.body.appendChild(overlay);
   }
 
-  modalOverlay.innerHTML = `
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 class="modal-title">${title}</h3>
-        <button class="icon-btn" onclick="window.closeModal()">✕</button>
+  overlay.innerHTML = `
+    <div class="modal ${opts.size ? `modal--${opts.size}` : ''}" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal__head">
+        <h3 class="modal__title" id="modal-title">${title}</h3>
+        <button class="icon-btn" onclick="window.closeModal()" aria-label="Close">${icon('x', 18)}</button>
       </div>
-      <div class="modal-body">${bodyHtml}</div>
-      ${footerHtml ? `<div class="modal-footer">${footerHtml}</div>` : ''}
+      <div class="modal__body">${bodyHtml}</div>
+      ${footerHtml ? `<div class="modal__foot">${footerHtml}</div>` : ''}
     </div>
   `;
-  modalOverlay.style.display = 'flex';
+  overlay.classList.add('is-open');
+  document.body.classList.add('has-modal');
+  const focusTarget = overlay.querySelector('.modal__body input, .modal__body button, .modal__foot button') || overlay.querySelector('.icon-btn');
+  if (focusTarget) setTimeout(() => focusTarget.focus({ preventScroll: true }), 30);
 }
 
 export function closeModal() {
-  const modalOverlay = document.getElementById('global-modal-overlay');
-  if (modalOverlay) {
-    modalOverlay.style.display = 'none';
-    modalOverlay.innerHTML = '';
+  const overlay = document.getElementById('global-modal-overlay');
+  if (overlay) {
+    overlay.classList.remove('is-open');
+    overlay.innerHTML = '';
   }
+  document.body.classList.remove('has-modal');
   mapCtrl.disableLocationPicker();
 }
 window.closeModal = closeModal;
 
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.body.classList.contains('has-modal')) closeModal();
+});
+
 // Application Initialization
 function initApp() {
+  const initial = store.get();
+  document.documentElement.setAttribute('data-theme', initial.theme === 'dark' ? 'dark' : 'light');
+  if (initial.isAudioMuted && !soundFx.isMuted) soundFx.toggleMute();
+
   safetyEngine.startMonitoring();
 
-  // Mount UI components
   parentUI.mount('parent-content-area');
   childUI.mount('child-content-area');
 
-  // Handle Mode & Tab switches from state
+  let lastMode = null;
   const syncViewMode = (state) => {
     const parentContainer = document.getElementById('parent-container');
     const childContainer = document.getElementById('child-container');
-    const modeButtons = document.querySelectorAll('.mode-btn');
 
-    modeButtons.forEach(btn => {
-      if (btn.dataset.mode === state.activeMode) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      const active = btn.dataset.mode === state.activeMode;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active);
     });
 
-    if (state.activeMode === 'child') {
-      if (parentContainer) parentContainer.style.display = 'none';
-      if (childContainer) childContainer.style.display = 'flex';
-    } else {
-      if (childContainer) childContainer.style.display = 'none';
-      if (parentContainer) parentContainer.style.display = 'flex';
+    const isChild = state.activeMode === 'child';
+    // The map is hidden in child mode: pause it, and resume (replaying queued moves) on return
+    if (lastMode && lastMode !== state.activeMode) {
+      if (isChild) mapCtrl.onTabDeactivated();
+      else if (state.activeParentTab === 'map') setTimeout(() => mapCtrl.onTabActivated(), 0);
     }
+    lastMode = state.activeMode;
+    if (parentContainer) parentContainer.hidden = isChild;
+    if (childContainer) childContainer.hidden = !isChild;
+    document.body.dataset.mode = isChild ? 'child' : 'parent';
+    document.body.dataset.tab = state.activeParentTab || 'home';
 
-    // Update Bottom Nav active state
-    const navItems = document.querySelectorAll('.parent-bottom-nav .nav-item');
-    navItems.forEach(item => {
-      if (item.dataset.tab === state.activeParentTab) {
-        item.classList.add('active');
-      } else {
-        item.classList.remove('active');
-      }
+    document.querySelectorAll('.nav-item').forEach(item => {
+      const active = item.dataset.tab === state.activeParentTab;
+      item.classList.toggle('active', active);
+      if (active) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
     });
 
-    // Toggle Mobile App Preview Mode
-    const mainViewport = document.getElementById('main-viewport');
-    const viewToggleBtn = document.getElementById('view-mode-toggle-btn');
-    if (mainViewport) {
-      if (state.isMobilePreview) {
-        mainViewport.classList.add('mobile-preview-mode');
-        if (viewToggleBtn) {
-          viewToggleBtn.classList.add('active');
-          viewToggleBtn.innerHTML = ICON_DESKTOP;
-          viewToggleBtn.title = 'Switch to full desktop responsive layout';
-        }
-      } else {
-        mainViewport.classList.remove('mobile-preview-mode');
-        if (viewToggleBtn) {
-          viewToggleBtn.classList.remove('active');
-          viewToggleBtn.innerHTML = ICON_PHONE;
-          viewToggleBtn.title = 'Preview how SafeHaven looks on a smartphone';
-        }
-      }
-    }
+    const unread = (state.alerts || []).filter(a => !a.isDismissed && (a.type === 'critical' || a.type === 'warning')).length;
+    document.querySelectorAll('[data-alert-count]').forEach(el => {
+      el.textContent = unread;
+      el.hidden = unread === 0;
+    });
 
-    // Audio Mute Icon
     const audioBtn = document.getElementById('audio-toggle-btn');
     if (audioBtn) {
-      audioBtn.innerHTML = state.isAudioMuted ? ICON_SOUND_OFF : ICON_SOUND_ON;
+      audioBtn.innerHTML = icon(state.isAudioMuted ? 'volumeX' : 'volume', 18);
+      audioBtn.setAttribute('aria-label', state.isAudioMuted ? 'Unmute sound alerts' : 'Mute sound alerts');
     }
 
-    // Gmail Header Display
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    if (themeBtn) {
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      themeBtn.innerHTML = icon(dark ? 'sun' : 'moon', 18);
+      themeBtn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+    }
+
+    const isAuth = state.auth && state.auth.isAuthenticated;
     const gmailDisplay = document.getElementById('header-gmail-email');
+    const gmailInitial = document.getElementById('header-gmail-initial');
     const gmailBtn = document.getElementById('gmail-auth-btn');
-    if (gmailDisplay) {
-      const isAuth = state.auth && state.auth.isAuthenticated;
-      gmailDisplay.textContent = isAuth ? state.auth.email : 'Sign in';
-      if (gmailBtn) {
-        if (isAuth) {
-          gmailBtn.classList.remove('unauthenticated');
-        } else {
-          gmailBtn.classList.add('unauthenticated');
-        }
-      }
-    }
+    if (gmailDisplay) gmailDisplay.textContent = isAuth ? (state.auth.name || state.auth.email) : 'Sign in';
+    if (gmailInitial) gmailInitial.textContent = isAuth ? (state.auth.name || state.auth.email || 'V').charAt(0).toUpperCase() : '?';
+    if (gmailBtn) gmailBtn.classList.toggle('unauthenticated', !isAuth);
 
-    // Emergency SOS Broadcast Overlay
     renderEmergencyBroadcast(state);
   };
 
   store.subscribe(syncViewMode);
   syncViewMode(store.get());
 
-  // Initialize Live Backend Connection & Health Status
+  // Push a system notification for every newly raised alert; confirm SMS dispatch on SOS
+  const seenAlerts = new Set((store.get().alerts || []).map(a => a.id));
+  let lastSosTs = store.get().activeSosAlert ? store.get().activeSosAlert.timestamp : null;
+  store.subscribe((state) => {
+    (state.alerts || []).forEach(a => {
+      if (seenAlerts.has(a.id)) return;
+      seenAlerts.add(a.id);
+      if (a.type === 'critical' || a.type === 'warning') {
+        const name = (store.getChild(a.childId) || {}).name || a.childName;
+        pushNotify(clean(a.title), `${name}: ${clean(a.what)}`, a.id);
+      }
+    });
+
+    const sos = state.activeSosAlert;
+    if (sos && sos.timestamp !== lastSosTs) {
+      lastSosTs = sos.timestamp;
+      if (state.settings.notifications.sms !== false) {
+        const count = state.settings.emergencyContacts.filter(c => c.notifySOS).length;
+        setTimeout(() => showToast('SMS sent', `Live location texted to ${count} SOS contacts.`, 'info'), 600);
+      }
+    } else if (!sos) {
+      lastSosTs = null;
+    }
+  });
+
   initBackendSync();
 }
 
 async function initBackendSync() {
-  const badge = document.getElementById('backend-status-badge');
   try {
     const res = await fetch('/api/health');
     if (res.ok) {
       const data = await res.json();
-      console.log('✅ SafeHaven Backend Connected:', data);
-      if (badge) {
-        badge.innerHTML = '🟢 BACKEND & FRONTEND LIVE';
-        badge.style.background = 'var(--safe-bg)';
-        badge.style.color = '#047857';
-        badge.title = `Full-stack active on port ${data.port || 3000} (Uptime: ${data.uptimeSeconds}s)`;
-      }
-    } else {
-      if (badge) {
-        badge.innerHTML = '🟢 CLIENT LIVE (PWA)';
-        badge.title = 'Running in standalone client PWA mode';
-      }
+      console.log('SafeHaven backend connected:', data);
     }
   } catch (err) {
-    if (badge) {
-      badge.innerHTML = '🟢 CLIENT LIVE (PWA)';
-      badge.title = 'Standalone offline client mode active';
-    }
+    // Standalone client / offline PWA mode
   }
 }
 
@@ -229,59 +238,57 @@ if (document.readyState === 'loading') {
   initApp();
 }
 
-/* Fullscreen Emergency SOS Broadcast Overlay Controller */
+/* Fullscreen Emergency SOS Broadcast Overlay */
 function renderEmergencyBroadcast(state) {
   let overlay = document.getElementById('emergency-broadcast-overlay');
 
-  if (state.activeSosAlert) {
+  if (state.activeSosAlert && state.activeMode === 'parent') {
     const alert = state.activeSosAlert;
     const child = store.getChild(alert.childId);
 
     if (!overlay) {
       overlay = document.createElement('div');
       overlay.id = 'emergency-broadcast-overlay';
-      overlay.className = 'emergency-broadcast-overlay';
+      overlay.className = 'sos-overlay';
+      overlay.setAttribute('role', 'alertdialog');
+      overlay.setAttribute('aria-labelledby', 'sos-overlay-title');
       document.body.appendChild(overlay);
     }
 
     overlay.innerHTML = `
-      <div class="emergency-icon-pulse">🚨</div>
-      <div class="emergency-title">EMERGENCY SOS ACTIVATED</div>
-      <div style="font-size: 1.1rem; font-weight: 700; opacity: 0.95;">${child.name} requires immediate emergency assistance!</div>
+      <div class="sos-overlay__inner">
+        <div class="sos-overlay__pulse">${icon('siren', 34)}</div>
+        <p class="sos-overlay__eyebrow">Emergency SOS · ${new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+        <h2 class="sos-overlay__title" id="sos-overlay-title">${child.name} needs help now</h2>
+        <p class="sos-overlay__lede">${alert.raisedBy === 'guardian' ? `You raised an SOS for ${child.name}.` : `${child.name} pressed SOS.`} Emergency contacts have been notified${state.settings.notifications.sms !== false ? ' by push and SMS' : ''}.</p>
 
-      <div class="emergency-card-box">
-        <div style="font-size: 0.85rem; line-height: 1.6;">
-          <strong>Child:</strong> ${child.name} (${child.age} yrs) &bull; ${child.device}<br/>
-          <strong>Time of SOS:</strong> ${new Date(alert.timestamp).toLocaleTimeString()}<br/>
-          <strong>Battery Level:</strong> ${child.battery}% (${child.batteryStatus})<br/>
-          <strong>GPS Coordinates:</strong> ${child.lat.toFixed(4)}, ${child.lng.toFixed(4)}<br/>
-          <strong>Evidence:</strong> ${alert.evidence}
+        <div class="sos-overlay__card">
+          <img class="sos-overlay__avatar" src="${child.avatar}" alt="" />
+          <dl>
+            <div><dt>Location</dt><dd class="mono">${child.lat.toFixed(4)}, ${child.lng.toFixed(4)}</dd></div>
+            <div><dt>Battery</dt><dd>${child.battery}%</dd></div>
+            <div><dt>Device</dt><dd>${clean(child.device).split(' (')[0]}</dd></div>
+            <div><dt>Evidence</dt><dd>${clean(alert.evidence)}</dd></div>
+          </dl>
+        </div>
+
+        <div class="sos-overlay__actions">
+          <button class="btn btn--white btn--lg btn--block" onclick="window.callEmergencyServices()">${icon('phone', 18)} Call 112 emergency</button>
+          <div class="sos-overlay__row">
+            <button class="btn btn--glass-dark btn--block" onclick="window.callChildPhone('${child.name}')">${icon('phone', 16)} Call ${child.name}</button>
+            <button class="btn btn--glass-dark btn--block" onclick="window.locateChild('${child.id}'); window.resolveEmergencySOS();">${icon('locate', 16)} View & mark handled</button>
+          </div>
         </div>
       </div>
-
-      <div class="emergency-btn-group">
-        <button class="btn btn-danger" style="font-size: 1.15rem; padding: 1rem; border: 2px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.5);" onclick="window.callEmergencyServices()">
-          🚨 Call 112 / Emergency Dispatch
-        </button>
-        <button class="btn btn-secondary" style="font-size: 1rem; padding: 0.8rem; background: rgba(255,255,255,0.25); color: white; border: 1px solid rgba(255,255,255,0.4);" onclick="window.callChildPhone('${child.name}')">
-          📞 Call ${child.name}'s Phone
-        </button>
-        <button class="btn btn-secondary" style="font-size: 0.95rem; padding: 0.8rem; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3);" onclick="window.locateChild('${child.id}'); window.resolveEmergencySOS();">
-          🎯 View Live Location & Mark Handled
-        </button>
-      </div>
     `;
-    overlay.style.display = 'flex';
-  } else {
-    if (overlay) {
-      overlay.style.display = 'none';
-      overlay.remove();
-    }
+    overlay.classList.add('is-open');
+  } else if (overlay) {
+    overlay.remove();
   }
 }
 
 // -------------------------------------------------------------
-// WINDOW GLOBAL ACTIONS (Directly bound to buttons & onclick)
+// WINDOW GLOBAL ACTIONS (bound to buttons via onclick)
 // -------------------------------------------------------------
 
 window.switchMode = function(mode) {
@@ -289,38 +296,23 @@ window.switchMode = function(mode) {
 };
 
 window.switchTab = function(tab) {
-  store.update({ activeParentTab: tab });
+  store.update({ activeParentTab: tab, activeMode: 'parent' });
 };
-
-window.toggleMobilePreview = function() {
-  const current = !!store.get().isMobilePreview;
-  const next = !current;
-  store.update({ isMobilePreview: next });
-
-  // Recalculate leaflet map tiles if map tab is currently displayed
-  setTimeout(() => {
-    window.dispatchEvent(new Event('resize'));
-  }, 220);
-
-  showToast(
-    next ? '📱 Mobile App View' : '💻 Desktop View',
-    next ? 'Smartphone preview enabled — interactive mobile phone frame active' : 'Full-width desktop responsive view enabled',
-    'info'
-  );
-};
-
 
 window.toggleTheme = function() {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.classList.add('theme-switching');
   document.documentElement.setAttribute('data-theme', next);
   store.update({ theme: next });
+  mapCtrl.refreshTheme && mapCtrl.refreshTheme();
+  setTimeout(() => document.documentElement.classList.remove('theme-switching'), 300);
 };
 
 window.toggleAudioMute = function() {
   const isMuted = soundFx.toggleMute();
   store.update({ isAudioMuted: isMuted });
-  showToast('Audio Alerts', isMuted ? 'Muted' : 'Unmuted and ready', 'info');
+  showToast('Sound alerts', isMuted ? 'Muted' : 'On', 'info');
 };
 
 window.locateChild = function(childId) {
@@ -334,6 +326,20 @@ window.locateChild = function(childId) {
   }, 150);
 };
 
+window.locateSelectedChild = function() {
+  window.locateChild(store.get().selectedChildId);
+};
+
+window.navigateToSelectedChild = function() {
+  window.navigateToChild(store.get().selectedChildId);
+};
+
+window.mapZoom = function(delta) {
+  if (!mapCtrl.map) return;
+  if (delta > 0) mapCtrl.map.zoomIn();
+  else mapCtrl.map.zoomOut();
+};
+
 window.selectChildMap = function(childId) {
   store.update({ selectedChildId: childId });
   mapCtrl.locateChild(childId);
@@ -342,7 +348,6 @@ window.selectChildMap = function(childId) {
 
 window.fitAllMapBounds = function() {
   mapCtrl.fitAllMapBounds();
-  showToast('Map View', 'Fitted all family members and safe zones into view', 'info');
 };
 
 window.navigateToChild = function(childId) {
@@ -351,12 +356,82 @@ window.navigateToChild = function(childId) {
     activeParentTab: 'map',
     activeMode: 'parent'
   });
-  setTimeout(() => {
-    const nav = mapCtrl.navigateToChild(childId);
-    if (nav) {
-      showToast('Directions Active', `Distance: ${nav.distance} &bull; ${nav.eta}`, 'safe');
-    }
+  const panel = document.getElementById('map-directions');
+  const child = store.getChild(childId);
+  if (panel && child) {
+    panel.hidden = false;
+    panel.innerHTML = `
+      <div class="dir__head">
+        <span class="dir__icon">${icon('car', 18)}</span>
+        <div class="dir__sum"><strong>Finding the fastest route…</strong><span>To ${esc(child.name)}</span></div>
+        <button class="icon-btn" onclick="window.closeDirections()" aria-label="Close directions">${icon('x', 16)}</button>
+      </div>
+      <div class="dir__loading"><span></span><span></span><span></span></div>
+    `;
+  }
+  setTimeout(async () => {
+    const nav = await mapCtrl.navigateToChild(childId);
+    if (!nav || !panel) return;
+    panel.innerHTML = `
+      <div class="dir__head">
+        <span class="dir__icon">${icon('car', 18)}</span>
+        <div class="dir__sum"><strong>${esc(nav.eta)}</strong><span>${esc(nav.distance)} to ${esc(child.name)}</span></div>
+        <button class="icon-btn" onclick="window.closeDirections()" aria-label="Close directions">${icon('x', 16)}</button>
+      </div>
+      <ol class="dir__steps">
+        ${nav.steps.map((st, i) => `
+          <li class="dir__step ${i === nav.steps.length - 1 ? 'is-last' : ''}">
+            <span class="dir__step-icon">${icon(st.icon, 16)}</span>
+            <span class="dir__text">${esc(st.text)}</span>
+            <span class="dir__dist">${esc(st.dist)}</span>
+          </li>
+        `).join('')}
+      </ol>
+      <div class="dir__foot">
+        ${nav.source === 'approx' ? `<p class="dir__note">${icon('info', 13)} Approximate route — live routing is unavailable right now.</p>` : ''}
+        <a class="btn btn--primary btn--sm btn--block" href="${nav.gmapsUrl}" target="_blank" rel="noopener">${icon('navigation', 15)} Start in Google Maps</a>
+      </div>
+    `;
   }, 150);
+};
+
+window.closeDirections = function() {
+  const panel = document.getElementById('map-directions');
+  if (panel) {
+    panel.hidden = true;
+    panel.innerHTML = '';
+  }
+  mapCtrl.clearNavigation();
+};
+
+// Guardian-raised SOS for a child (from the child card quick action)
+window.parentSOSAlert = function(childId) {
+  const child = store.getChild(childId);
+  if (!child) return;
+  const contacts = store.get().settings.emergencyContacts.filter(c => c.notifySOS).length;
+  openModal(
+    `Raise an SOS for ${child.name}?`,
+    `
+      <p class="modal__lede">Use this if you believe ${child.name} is in danger and can't press SOS themselves.</p>
+      <ul class="sos-effects">
+        <li>${icon('siren', 16)} ${child.name}'s phone switches to emergency mode and shares live location continuously</li>
+        <li>${icon('message', 16)} ${contacts} SOS contacts are alerted${store.get().settings.notifications.sms !== false ? ' by push and SMS' : ''}</li>
+        <li>${icon('bell', 16)} The emergency siren sounds on this device</li>
+      </ul>
+    `,
+    `
+      <a class="btn btn--ghost" href="tel:112">${icon('phone', 15)} Call 112</a>
+      <button class="btn btn--ghost" onclick="window.closeModal()">Cancel</button>
+      <button class="btn btn--danger" onclick="window.confirmParentSOS('${childId}')">${icon('siren', 15)} Raise SOS</button>
+    `,
+    { size: 'sm' }
+  );
+};
+
+window.confirmParentSOS = function(childId) {
+  closeModal();
+  store.triggerSOS(childId, 'guardian');
+  soundFx.playEmergencySOS();
 };
 
 window.showChildRoute = function(childId) {
@@ -368,46 +443,37 @@ window.showChildRoute = function(childId) {
   setTimeout(() => {
     mapCtrl.locateChild(childId);
     mapCtrl.renderSelectedChildRoute();
-    showToast('Route History', "Displaying today's travel breadcrumb route", 'info');
+    showToast('Route', "Showing today's route", 'info');
   }, 150);
 };
 
 window.callChildPhone = function(name) {
-  showToast('Calling Phone', `Simulating direct phone call to ${name}...`, 'info');
+  showToast('Calling', `Calling ${name}…`, 'info');
 };
+
+const choice = (href, title, sub, ic, tone = '') => `
+  <a href="${href}" class="choice ${tone ? `choice--${tone}` : ''}">
+    <span class="choice__icon">${icon(ic, 18)}</span>
+    <span class="choice__body">
+      <span class="choice__title">${title}</span>
+      <span class="choice__sub">${sub}</span>
+    </span>
+    ${icon('chevronRight', 16, 'choice__chev')}
+  </a>
+`;
 
 window.callEmergencyServices = function() {
   openModal(
-    '🚨 Emergency Services Dispatch (112)',
+    'Call emergency services',
     `
-      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-        <p style="font-size: 0.85rem; color: var(--text-muted);">
-          Tap an emergency service below to initiate an immediate direct telephone dispatch.
-        </p>
-        <a href="tel:112" class="btn btn-danger" style="text-decoration: none; display: flex; justify-content: space-between; align-items: center; padding: 1rem;">
-          <div>
-            <div style="font-size: 1.05rem; font-weight: 800;">📞 112 National Emergency</div>
-            <div style="font-size: 0.75rem; opacity: 0.9;">Police, Fire, Ambulance, Disaster Response</div>
-          </div>
-          <span style="font-size: 1.4rem;">🚨</span>
-        </a>
-        <a href="tel:1098" class="btn btn-secondary" style="text-decoration: none; display: flex; justify-content: space-between; align-items: center; padding: 0.85rem;">
-          <div>
-            <div style="font-size: 0.95rem; font-weight: 700;">📞 1098 Childline India</div>
-            <div style="font-size: 0.72rem; color: var(--text-muted);">24/7 Free Child Protection & Helpline</div>
-          </div>
-          <span style="font-size: 1.3rem;">🛡️</span>
-        </a>
-        <a href="tel:100" class="btn btn-secondary" style="text-decoration: none; display: flex; justify-content: space-between; align-items: center; padding: 0.85rem;">
-          <div>
-            <div style="font-size: 0.95rem; font-weight: 700;">📞 100 Police Control Room</div>
-            <div style="font-size: 0.72rem; color: var(--text-muted);">Jammu & Kashmir Police Dispatch</div>
-          </div>
-          <span style="font-size: 1.3rem;">🚓</span>
-        </a>
+      <p class="modal__lede">Tap a number to start the call immediately.</p>
+      <div class="choices">
+        ${choice('tel:112', '112 · National emergency', 'Police, fire, ambulance and disaster response', 'siren', 'danger')}
+        ${choice('tel:1098', '1098 · Childline India', 'Free 24/7 child protection helpline', 'shield')}
+        ${choice('tel:100', '100 · Police control room', 'Jammu & Kashmir Police dispatch', 'building')}
       </div>
     `,
-    `<button class="btn btn-secondary" onclick="window.closeModal()">Close</button>`
+    `<button class="btn btn--soft" onclick="window.closeModal()">Close</button>`
   );
 };
 
@@ -422,101 +488,91 @@ window.setAlertFilter = function(filter) {
 
 window.dismissAlert = function(alertId) {
   store.dismissAlert(alertId);
-  showToast('Alert Dismissed', 'Event marked as handled', 'info');
+  showToast('Alert dismissed', 'Marked as handled', 'info');
 };
 
 // Add Safe Zone Modal
 window.openAddZoneModal = function() {
-  store.update({ activeParentTab: 'map' });
+  store.update({ activeParentTab: 'map', activeMode: 'parent' });
+  const center = mapCtrl.map ? mapCtrl.map.getCenter() : { lat: 32.7155, lng: 74.8672 };
 
   openModal(
-    'Add New Safe Zone',
+    'New safe zone',
     `
-      <div style="display: flex; flex-direction: column; gap: 0.85rem;">
-        <p style="font-size: 0.8rem; color: var(--text-muted);">
-          Create a trusted geofence area. Click anywhere on the map or enter details below.
-        </p>
-        <div>
-          <label style="display: block; font-size: 0.78rem; font-weight: 700; margin-bottom: 0.3rem;">Zone Name</label>
-          <input id="new-zone-name" type="text" placeholder="e.g. Grandma's House, Library, Park" style="width: 100%;" value="After-school Tutoring 📚" />
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-          <div>
-            <label style="display: block; font-size: 0.78rem; font-weight: 700; margin-bottom: 0.3rem;">Zone Type</label>
-            <select id="new-zone-type" style="width: 100%;">
-              <option value="school">School 🏫</option>
-              <option value="home">Home 🏠</option>
-              <option value="sports">Sports Ground 🏟️</option>
-              <option value="family">Family/Grandparents 👵</option>
-              <option value="restricted">Restricted / Hazard ⚠️</option>
-            </select>
-          </div>
-          <div>
-            <label style="display: block; font-size: 0.78rem; font-weight: 700; margin-bottom: 0.3rem;">Schedule</label>
-            <input id="new-zone-schedule" type="text" value="Mon-Fri 03:30 PM - 05:30 PM" style="width: 100%;" />
-          </div>
-        </div>
-        <div>
-          <label style="display: block; font-size: 0.78rem; font-weight: 700; margin-bottom: 0.3rem;">
-            Radius: <span id="radius-val-display">300</span> meters
+      <p class="modal__lede">Create a trusted area. You'll be alerted when a child enters or leaves it.</p>
+      <div class="form">
+        <label class="field">
+          <span class="field__label">Name</span>
+          <input id="new-zone-name" class="input" type="text" placeholder="e.g. Grandma's house, library, park" value="After-school tutoring" />
+        </label>
+        <div class="form__row">
+          <label class="field">
+            <span class="field__label">Type</span>
+            <span class="select-wrap select-wrap--full">
+              <select id="new-zone-type" class="select">
+                <option value="school">School</option>
+                <option value="home">Home</option>
+                <option value="sports">Sports ground</option>
+                <option value="family">Family</option>
+                <option value="restricted">Restricted area</option>
+              </select>
+              ${icon('chevronDown', 15)}
+            </span>
           </label>
-          <input id="new-zone-radius" type="range" min="50" max="1200" step="25" value="300" style="width: 100%;" oninput="document.getElementById('radius-val-display').textContent = this.value" />
+          <label class="field">
+            <span class="field__label">Schedule</span>
+            <input id="new-zone-schedule" class="input" type="text" value="Mon–Fri 3:30 – 5:30 PM" />
+          </label>
         </div>
-        <div>
-          <label style="display: block; font-size: 0.78rem; font-weight: 700; margin-bottom: 0.3rem;">Location Coordinates</label>
-          <div style="display: flex; gap: 0.5rem;">
-            <input id="new-zone-lat" type="text" value="37.7770" placeholder="Latitude" style="flex: 1;" />
-            <input id="new-zone-lng" type="text" value="-122.4170" placeholder="Longitude" style="flex: 1;" />
+        <label class="field">
+          <span class="field__label">Radius <output id="radius-val-display" class="field__value">300 m</output></span>
+          <input id="new-zone-radius" class="range" type="range" min="50" max="1200" step="25" value="300" oninput="document.getElementById('radius-val-display').textContent = this.value + ' m'" />
+        </label>
+        <div class="field">
+          <span class="field__label">Centre point</span>
+          <div class="form__row">
+            <input id="new-zone-lat" class="input mono" type="text" value="${center.lat.toFixed(4)}" placeholder="Latitude" aria-label="Latitude" />
+            <input id="new-zone-lng" class="input mono" type="text" value="${center.lng.toFixed(4)}" placeholder="Longitude" aria-label="Longitude" />
           </div>
-          <button class="btn btn-secondary" style="width: 100%; margin-top: 0.5rem; font-size: 0.75rem;" onclick="window.pickLocationOnMap()">
-            📍 Click Map to Pick Coordinates
-          </button>
+          <button class="btn btn--soft btn--sm btn--block" onclick="window.pickLocationOnMap()">${icon('pin', 15)} Pick on map</button>
         </div>
       </div>
     `,
     `
-      <button class="btn btn-secondary" onclick="window.closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="window.saveNewSafeZone()">Save Safe Zone</button>
+      <button class="btn btn--ghost" onclick="window.closeModal()">Cancel</button>
+      <button class="btn btn--primary" onclick="window.saveNewSafeZone()">Save zone</button>
     `
   );
 };
 
 window.pickLocationOnMap = function() {
-  showToast('Map Picker Active', 'Click anywhere on the map to set the geofence center.', 'info');
+  showToast('Pick a point', 'Click anywhere on the map to set the zone centre.', 'info');
   mapCtrl.enableLocationPicker((lat, lng) => {
     const latInput = document.getElementById('new-zone-lat');
     const lngInput = document.getElementById('new-zone-lng');
     if (latInput) latInput.value = lat.toFixed(4);
     if (lngInput) lngInput.value = lng.toFixed(4);
     mapCtrl.setPickerMarker(lat, lng);
-    showToast('Location Selected', `Coordinates: (${lat.toFixed(4)}, ${lng.toFixed(4)})`, 'safe');
+    showToast('Point selected', `${lat.toFixed(4)}, ${lng.toFixed(4)}`, 'safe');
   });
 };
 
 window.saveNewSafeZone = function() {
-  const name = document.getElementById('new-zone-name')?.value || 'Custom Safe Zone';
+  const name = document.getElementById('new-zone-name')?.value || 'Custom safe zone';
   const type = document.getElementById('new-zone-type')?.value || 'school';
   const schedule = document.getElementById('new-zone-schedule')?.value || 'Daily';
   const radius = parseInt(document.getElementById('new-zone-radius')?.value || '300', 10);
-  const lat = parseFloat(document.getElementById('new-zone-lat')?.value || '37.7770');
-  const lng = parseFloat(document.getElementById('new-zone-lng')?.value || '-122.4170');
-
-  const icons = {
-    home: '🏠',
-    school: '🏫',
-    sports: '🏟️',
-    family: '👵',
-    restricted: '⚠️'
-  };
+  const lat = parseFloat(document.getElementById('new-zone-lat')?.value || '32.7155');
+  const lng = parseFloat(document.getElementById('new-zone-lng')?.value || '74.8672');
 
   store.addSafeZone({
     name: name,
-    icon: icons[type] || '📍',
+    icon: '',
     type: type,
     lat: lat,
     lng: lng,
     radius: radius,
-    address: `${name} vicinity, SF, CA`,
+    address: `${name}, Jammu`,
     activeSchedule: schedule,
     alertOnEntry: true,
     alertOnExit: true,
@@ -525,75 +581,81 @@ window.saveNewSafeZone = function() {
 
   closeModal();
   mapCtrl.renderSafeZones();
-  showToast('Safe Zone Created', `"${name}" with ${radius}m radius is now active.`, 'safe');
+  showToast('Safe zone created', `"${name}" (${radius} m) is now active.`, 'safe');
 };
 
 window.deleteZoneConfirm = function(zoneId) {
-  if (confirm('Are you sure you want to remove this Safe Zone?')) {
-    store.deleteSafeZone(zoneId);
-    mapCtrl.renderSafeZones();
-    showToast('Zone Removed', 'Safe zone successfully deleted', 'info');
-  }
+  const zone = store.get().safeZones.find(z => z.id === zoneId);
+  openModal(
+    'Remove safe zone?',
+    `<p class="modal__lede">${zone ? `<strong>${clean(zone.name)}</strong> will be removed and` : 'This zone will be removed and'} you'll stop receiving entry and exit alerts for it.</p>`,
+    `
+      <button class="btn btn--ghost" onclick="window.closeModal()">Cancel</button>
+      <button class="btn btn--danger" onclick="window.confirmDeleteZone('${zoneId}')">Remove zone</button>
+    `,
+    { size: 'sm' }
+  );
+};
+
+window.confirmDeleteZone = function(zoneId) {
+  store.deleteSafeZone(zoneId);
+  mapCtrl.renderSafeZones();
+  closeModal();
+  showToast('Zone removed', 'The safe zone was deleted.', 'info');
 };
 
 window.focusZoneOnMap = function(zoneId) {
   const zone = store.get().safeZones.find(z => z.id === zoneId);
   if (!zone) return;
-  store.update({ activeParentTab: 'map' });
+  store.update({ activeParentTab: 'map', activeMode: 'parent' });
   setTimeout(() => {
-    mapCtrl.map.flyTo([zone.lat, zone.lng], 15);
+    if (!mapCtrl.map) return;
+    mapCtrl._move(m => m.flyTo([zone.lat, zone.lng], 15));
     if (mapCtrl.zoneCircles[zoneId]) {
       mapCtrl.zoneCircles[zoneId].openPopup();
     }
-  }, 150);
+  }, 250);
 };
 
 // Pairing Modal
 window.openPairingModal = function() {
-  const code = Math.floor(100000 + Math.random() * 900000);
+  const code = String(Math.floor(100000 + Math.random() * 900000));
   openModal(
-    'Pair a Child Device',
+    'Pair a child’s device',
     `
-      <div style="text-align: center;">
-        <p style="font-size: 0.82rem; color: var(--text-muted);">
-          To link a new child phone, open <strong>SafeHaven</strong> on the child device and enter this one-time secure pairing PIN:
-        </p>
-
-        <div class="pairing-code-box">
-          <span style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8;">One-Time Secure Code</span>
-          <div class="code-digits">${code}</div>
-          <span style="font-size: 0.68rem; opacity: 0.7;">Expires in 10 minutes &bull; Cryptographically generated</span>
+      <p class="modal__lede">Open SafeHaven on your child's phone and enter this one-time code, or scan the QR code.</p>
+      <div class="pair">
+        <div class="pair__code" aria-label="Pairing code ${code}">
+          ${code.split('').map(d => `<span>${d}</span>`).join('')}
         </div>
-
-        <div style="display: flex; justify-content: center; margin: 1rem 0;">
-          <div class="qr-code-placeholder">
-            <!-- Simulated QR code SVG -->
-            <svg width="124" height="124" viewBox="0 0 100 100" fill="#0f172a">
-              <rect width="30" height="30" rx="4" />
-              <rect x="70" width="30" height="30" rx="4" />
-              <rect y="70" width="30" height="30" rx="4" />
-              <rect x="8" y="8" width="14" height="14" fill="white" />
-              <rect x="78" y="8" width="14" height="14" fill="white" />
-              <rect x="8" y="78" width="14" height="14" fill="white" />
-              <rect x="40" y="10" width="10" height="10" />
-              <rect x="40" y="40" width="20" height="20" />
-              <rect x="70" y="50" width="10" height="20" />
-              <rect x="20" y="50" width="10" height="10" />
-              <rect x="50" y="80" width="20" height="10" />
-            </svg>
-          </div>
+        <p class="pair__hint">${icon('clock', 13)} Expires in 10 minutes</p>
+        <div class="pair__qr">
+          <svg width="132" height="132" viewBox="0 0 100 100" aria-hidden="true">
+            <rect width="30" height="30" rx="6" />
+            <rect x="70" width="30" height="30" rx="6" />
+            <rect y="70" width="30" height="30" rx="6" />
+            <rect x="8" y="8" width="14" height="14" rx="3" class="qr-hole" />
+            <rect x="78" y="8" width="14" height="14" rx="3" class="qr-hole" />
+            <rect x="8" y="78" width="14" height="14" rx="3" class="qr-hole" />
+            <rect x="40" y="6" width="10" height="10" rx="2" />
+            <rect x="54" y="18" width="8" height="8" rx="2" />
+            <rect x="40" y="40" width="20" height="20" rx="3" />
+            <rect x="70" y="44" width="10" height="20" rx="2" />
+            <rect x="86" y="70" width="10" height="10" rx="2" />
+            <rect x="20" y="44" width="10" height="10" rx="2" />
+            <rect x="6" y="54" width="8" height="8" rx="2" />
+            <rect x="50" y="80" width="20" height="10" rx="2" />
+            <rect x="76" y="86" width="8" height="10" rx="2" />
+          </svg>
         </div>
-
-        <p style="font-size: 0.72rem; color: var(--text-subtle);">
-          Pairing requires physical possession of both devices. Once linked, the child will see transparent confirmation that location sharing is active.
-        </p>
       </div>
+      <p class="fine">Pairing needs both phones in hand. Once linked, your child will always see that location sharing is on.</p>
     `,
     `
-      <button class="btn btn-primary" onclick="window.closeModal(); window.showToast('Device Paired', 'Simulated pairing complete!', 'safe');">
-        Simulate Connection
-      </button>
-    `
+      <button class="btn btn--ghost" onclick="window.closeModal()">Cancel</button>
+      <button class="btn btn--primary" onclick="window.closeModal(); window.showToast('Device paired', 'The new device is now linked.', 'safe');">Simulate connection</button>
+    `,
+    { size: 'sm' }
   );
 };
 
@@ -603,27 +665,27 @@ window.openChildHistoryModal = function(childId) {
   const route = store.get().routes[childId] || [];
 
   openModal(
-    `${child.name}'s Daily Timeline`,
+    `${child.name}'s day`,
     `
-      <div>
-        <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
-          Chronological movement and safe zone check-ins for today. Retention policy: 30 days.
-        </p>
-        <div style="display: flex; flex-direction: column; gap: 0.65rem; border-left: 2px solid var(--border-light); margin-left: 1rem; padding-left: 1rem;">
-          ${route.map(pt => `
-            <div style="position: relative;">
-              <div style="position: absolute; left: -1.45rem; top: 3px; width: 10px; height: 10px; border-radius: 50%; background: var(--primary);"></div>
-              <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">${pt.label}</div>
-              <div style="font-size: 0.72rem; color: var(--text-subtle);">${pt.time} &bull; Lat: ${pt.lat.toFixed(4)}, Lng: ${pt.lng.toFixed(4)}</div>
-            </div>
+      <p class="modal__lede">Today's movements and safe-zone check-ins. History is kept for 30 days.</p>
+      ${route.length ? `
+        <ol class="timeline">
+          ${route.map((pt, i) => `
+            <li class="timeline__item ${i === route.length - 1 ? 'is-last' : ''}">
+              <span class="timeline__time">${pt.time}</span>
+              <span class="timeline__dot"></span>
+              <div class="timeline__body">
+                <div class="timeline__title">${clean(pt.label)}</div>
+                <div class="timeline__sub mono">${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}</div>
+              </div>
+            </li>
           `).join('')}
-        </div>
-      </div>
+        </ol>
+      ` : `<div class="empty empty--compact"><span class="empty__icon">${icon('history', 22)}</span><p>No history recorded yet.</p></div>`}
     `,
     `
-      <button class="btn btn-primary" onclick="window.showChildRoute('${childId}'); window.closeModal();">
-        🗺️ Replay on Map
-      </button>
+      <button class="btn btn--ghost" onclick="window.closeModal()">Close</button>
+      <button class="btn btn--primary" onclick="window.showChildRoute('${childId}'); window.closeModal();">${icon('map', 15)} Replay on map</button>
     `
   );
 };
@@ -632,21 +694,47 @@ window.openChildHistoryModal = function(childId) {
 window.openCallParentModal = function() {
   const contacts = store.get().settings.emergencyContacts.slice(0, 3);
   openModal(
-    'Call Guardian',
+    'Who do you want to call?',
     `
-      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+      <div class="choices">
         ${contacts.map(c => `
-          <button class="btn btn-secondary" style="padding: 1rem; text-align: left; justify-content: space-between; display: flex;" onclick="window.callChildPhone('${c.name}'); window.closeModal();">
-            <div>
-              <div style="font-size: 0.95rem; font-weight: 700;">${c.name}</div>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">${c.relation}</div>
-            </div>
-            <span style="font-size: 1.3rem;">📞</span>
+          <button class="choice" onclick="window.callChildPhone('${clean(c.name).split(' (')[0]}'); window.closeModal();">
+            <span class="choice__icon">${icon('phone', 18)}</span>
+            <span class="choice__body">
+              <span class="choice__title">${clean(c.name)}</span>
+              <span class="choice__sub">${clean(c.relation)}</span>
+            </span>
+            ${icon('chevronRight', 16, 'choice__chev')}
           </button>
         `).join('')}
       </div>
     `,
-    `<button class="btn btn-secondary" onclick="window.closeModal()">Close</button>`
+    `<button class="btn btn--soft btn--block" onclick="window.closeModal()">Close</button>`,
+    { size: 'sm' }
+  );
+};
+
+// Safe places list (Child Mode)
+window.openChildZonesModal = function() {
+  const zones = store.get().safeZones.filter(z => !z.isRestricted);
+  openModal(
+    'Your safe places',
+    `
+      <p class="modal__lede">When you're at one of these places, Dad automatically knows you've arrived safely.</p>
+      <div class="choices">
+        ${zones.map(z => `
+          <div class="choice choice--static">
+            <span class="choice__icon choice__icon--safe">${zoneIcon(z.type, 18)}</span>
+            <span class="choice__body">
+              <span class="choice__title">${clean(z.name)}</span>
+              <span class="choice__sub">${clean(z.activeSchedule)}</span>
+            </span>
+          </div>
+        `).join('')}
+      </div>
+    `,
+    `<button class="btn btn--soft btn--block" onclick="window.closeModal()">Close</button>`,
+    { size: 'sm' }
   );
 };
 
@@ -658,13 +746,11 @@ window.childSendImSafe = function() {
 
   const notice = document.getElementById('child-toast-notice');
   if (notice) {
-    notice.style.display = 'flex';
-    setTimeout(() => {
-      notice.style.display = 'none';
-    }, 4000);
+    notice.hidden = false;
+    setTimeout(() => { notice.hidden = true; }, 4000);
   }
 
-  showToast('Check-in Sent', "Your parents received confirmation that you're safe ❤️", 'safe');
+  showToast('Check-in sent', "Your parents know you're safe.", 'safe');
 };
 
 window.childShareLiveLocation = function() {
@@ -672,16 +758,12 @@ window.childShareLiveLocation = function() {
   const child = store.getChild(childId);
 
   if ('geolocation' in navigator) {
-    showToast('Locating GPS...', 'Fetching your real device coordinates...', 'info');
+    showToast('Finding you…', 'Getting your location', 'info');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
         const acc = Math.round(accuracy);
-        store.updateUserLiveLocation({
-          lat: latitude,
-          lng: longitude,
-          accuracy: acc
-        });
+        store.updateUserLiveLocation({ lat: latitude, lng: longitude, accuracy: acc });
         store.updateChild(childId, {
           lat: latitude,
           lng: longitude,
@@ -693,56 +775,105 @@ window.childShareLiveLocation = function() {
           mapCtrl.renderLiveUserMarker();
         }
         soundFx.playSafeChime();
-        showToast('Live Location Shared', `GPS ping sent: ${latitude.toFixed(4)}°, ${longitude.toFixed(4)}° (±${acc}m)`, 'safe');
+        showToast('Location shared', `Sent to Dad · accurate to ${acc} m`, 'safe');
       },
       (err) => {
         console.warn('Geolocation error:', err);
         store.updateChild(childId, { lastUpdated: Date.now() });
-        showToast('Location Shared', `Standard telemetry ping sent. Accuracy: ${child.gpsAccuracy}`, 'info');
+        showToast('Location shared', `Sent your last known location (${clean(child.gpsAccuracy)})`, 'info');
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
   } else {
     store.updateChild(childId, { lastUpdated: Date.now() });
-    showToast('Location Shared', `Live GPS ping sent to Guardians. Accuracy: ${child.gpsAccuracy}`, 'safe');
+    showToast('Location shared', 'Sent to your guardians', 'safe');
   }
 };
 
 window.cancelChildSOS = function() {
   store.resolveSOS();
   soundFx.stopEmergencySOS();
-  showToast('SOS Resolved', 'Emergency alert cancelled.', 'info');
+  showToast('SOS cancelled', 'Your guardians were told it was a false alarm.', 'info');
 };
 
 window.resolveEmergencySOS = function() {
   store.resolveSOS();
   soundFx.stopEmergencySOS();
-  showToast('Emergency Resolved', 'Safety status marked as resolved by Guardian.', 'safe');
+  showToast('Emergency resolved', 'Marked as handled.', 'safe');
 };
 
-// Settings Toggles
+// Settings
 window.toggleNotificationSetting = function(key) {
   const settings = store.get().settings;
-  settings.notifications[key] = !settings.notifications[key];
+  // Settings added later may be missing from saved data: every alert type defaults to on (push defaults to off)
+  const current = key === 'push' ? !!settings.notifications[key] : settings.notifications[key] !== false;
+  settings.notifications[key] = !current;
   store.update({ settings: settings });
-  showToast('Preference Updated', 'Notification rules saved.', 'info');
+  showToast('Saved', 'Notification preferences updated.', 'info');
+};
+
+window.setLocationSharingMode = function(mode) {
+  const settings = store.get().settings;
+  settings.privacy.locationSharingMode = mode;
+  store.update({ settings: settings });
+  const labels = { always: 'Always on — continuous live tracking.', moving: 'While moving — updates when walking or travelling.', sos: 'Emergency only — shared when SOS is pressed.' };
+  showToast('Location sharing', labels[mode] || 'Updated', 'info');
+};
+
+window.togglePushNotifications = async function(input) {
+  const settings = store.get().settings;
+  if (!input.checked) {
+    settings.notifications.push = false;
+    store.update({ settings });
+    showToast('Push notifications off', 'You will still see alerts inside SafeHaven.', 'info');
+    return;
+  }
+  if (typeof Notification === 'undefined') {
+    input.checked = false;
+    showToast('Not supported', 'This browser does not support notifications.', 'warning');
+    return;
+  }
+  const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  settings.notifications.push = permission === 'granted';
+  store.update({ settings });
+  if (permission === 'granted') {
+    showToast('Push notifications on', 'You will be alerted even when SafeHaven is in the background.', 'safe');
+    pushNotify('SafeHaven notifications are on', 'This is how safety alerts will appear on this device.', 'push-test');
+  } else {
+    showToast('Notifications blocked', 'Allow notifications for this site in your browser settings.', 'warning');
+  }
+};
+
+window.childCallGuardian = function() {
+  const parent = store.get().parent;
+  showToast('Calling Dad', `Calling ${parent.name.split(' ')[0]} on ${parent.phone}…`, 'info');
 };
 
 window.updateRetentionPolicy = function(val) {
   const settings = store.get().settings;
   settings.privacy.historyRetentionDays = parseInt(val, 10);
   store.update({ settings: settings });
-  showToast('Retention Updated', `Location history will be kept for ${val === '0' ? '0 days (None)' : val + ' days'}.`, 'info');
+  const label = val === '0' ? 'History will not be kept.' : val === '1' ? 'History will be kept for 24 hours.' : `History will be kept for ${val} days.`;
+  showToast('Saved', label, 'info');
 };
 
 window.purgeLocationHistory = function() {
-  if (confirm('Are you sure you want to permanently delete all stored location histories?')) {
-    store.update({
-      routes: { c1: [], c2: [], c3: [] }
-    });
-    mapCtrl.renderSelectedChildRoute();
-    showToast('History Deleted', 'All location trails purged permanently.', 'info');
-  }
+  openModal(
+    'Delete all location history?',
+    `<p class="modal__lede">Every stored route and location trail for all children will be permanently deleted. This can't be undone.</p>`,
+    `
+      <button class="btn btn--ghost" onclick="window.closeModal()">Cancel</button>
+      <button class="btn btn--danger" onclick="window.confirmPurgeHistory()">Delete history</button>
+    `,
+    { size: 'sm' }
+  );
+};
+
+window.confirmPurgeHistory = function() {
+  store.update({ routes: { c1: [], c2: [], c3: [] } });
+  mapCtrl.renderSelectedChildRoute();
+  closeModal();
+  showToast('History deleted', 'All location trails were removed.', 'info');
 };
 
 window.exportDataJSON = function() {
@@ -751,53 +882,32 @@ window.exportDataJSON = function() {
   dlAnchor.setAttribute("href", dataStr);
   dlAnchor.setAttribute("download", "safehaven_family_data.json");
   dlAnchor.click();
-  showToast('Data Exported', 'Downloaded safehaven_family_data.json', 'safe');
+  showToast('Export ready', 'Downloaded safehaven_family_data.json', 'safe');
 };
 
-// Bind Simulator Presets to global scope
-window.simScenario1 = () => simulator.runScenario1();
-window.simScenario2 = () => simulator.runScenario2();
-window.simScenario3 = () => simulator.runScenario3();
-window.simScenario4 = () => simulator.runScenario4();
-window.simScenario5 = () => simulator.runScenario5();
-window.simTriggerFall = () => simulator.triggerManualFall();
-window.simDrainBattery = () => simulator.triggerBatteryDrain();
-window.simChildCheckIn = () => simulator.triggerChildCheckIn();
-window.simResetAll = () => simulator.resetAll();
-
-// Google Maps Style Switcher Controller
+// Map Style Switcher
 window.changeMapStyle = function(style) {
   mapCtrl.setMapStyle(style);
-  const names = {
-    'google_streets': 'Streets (Roadmap)',
-    'google_hybrid': 'Satellite Hybrid',
-    'google_terrain': 'Topographic Terrain'
-  };
-  showToast('Google Maps View', `Layer switched to ${names[style] || style}`, 'info');
 };
 
 // Live Hardware GPS & Jammu Hub Location Controllers
 window.useMyCurrentLocation = function(targetRole = null) {
   if (!('geolocation' in navigator)) {
-    showToast('GPS Unsupported', 'Geolocation is not supported by your browser.', 'warning');
+    showToast('Location unavailable', 'This browser does not support location.', 'warning');
     return;
   }
 
-  showToast('Detecting Location', 'Querying device GPS sensors...', 'info');
+  showToast('Finding your location', 'Checking device GPS…', 'info');
 
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
       const accRounded = Math.round(accuracy);
 
-      store.updateUserLiveLocation({
-        lat: latitude,
-        lng: longitude,
-        accuracy: accRounded
-      });
+      store.updateUserLiveLocation({ lat: latitude, lng: longitude, accuracy: accRounded });
 
       if (!mapCtrl.map) {
-        store.update({ activeParentTab: 'map' });
+        store.update({ activeParentTab: 'map', activeMode: 'parent' });
         setTimeout(() => {
           mapCtrl.renderLiveUserMarker();
           mapCtrl.goToLiveGPS();
@@ -807,32 +917,26 @@ window.useMyCurrentLocation = function(targetRole = null) {
         mapCtrl.goToLiveGPS();
       }
 
-      // Update Hub Buttons active state
-      const btnLive = document.getElementById('btn-hub-live');
-      const btnJammu = document.getElementById('btn-hub-jammu');
-      if (btnLive) btnLive.classList.add('active');
-      if (btnJammu) btnJammu.classList.remove('active');
-
       if (targetRole === 'parent') {
         store.assignLiveLocationToParent();
         mapCtrl.renderParentMarker();
-        showToast('Guardian Updated', `Guardian location set to device GPS: ${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`, 'safe');
+        showToast('Guardian location updated', `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'safe');
       } else if (targetRole === 'child') {
         const childId = store.get().selectedChildId;
         store.assignLiveLocationToChild(childId);
         mapCtrl.renderChildrenMarkers();
-        showToast('Child Synced', `Child location synced to live GPS: ${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`, 'safe');
+        showToast('Child location synced', `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'safe');
       } else {
-        showToast('📍 Live GPS Located', `Verified hardware fix: ${latitude.toFixed(4)}° N, ${longitude.toFixed(4)}° E (±${accRounded}m)`, 'safe');
+        showToast('Location found', `${latitude.toFixed(4)}° N, ${longitude.toFixed(4)}° E · ±${accRounded} m`, 'safe');
       }
     },
     (err) => {
       console.warn('Geolocation error:', err);
-      let msg = 'Could not access device location. Please allow location permissions in your browser.';
-      if (err.code === 1) msg = 'Location permission was denied. Please allow location in your browser address bar.';
-      else if (err.code === 2) msg = 'Position unavailable. GPS signal could not be acquired.';
-      else if (err.code === 3) msg = 'Location request timed out. Retrying with network location.';
-      showToast('GPS Notice', msg, 'warning');
+      let msg = 'Could not access your location. Allow location access in your browser.';
+      if (err.code === 1) msg = 'Location permission was denied. Allow it from the address bar.';
+      else if (err.code === 2) msg = 'GPS signal could not be acquired.';
+      else if (err.code === 3) msg = 'Location request timed out. Try again.';
+      showToast('Location unavailable', msg, 'warning');
     },
     { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
   );
@@ -840,18 +944,13 @@ window.useMyCurrentLocation = function(targetRole = null) {
 
 window.goToJammuLocation = function() {
   mapCtrl.goToJammu();
-  const btnLive = document.getElementById('btn-hub-live');
-  const btnJammu = document.getElementById('btn-hub-jammu');
-  if (btnJammu) btnJammu.classList.add('active');
-  if (btnLive) btnLive.classList.remove('active');
-  showToast('Jammu City Hub', 'Centered on Gandhi Nagar, DPS Jammu & Tawi River', 'info');
 };
 
 window.setGuardianToLiveGPS = function() {
   const success = store.assignLiveLocationToParent();
   if (success) {
     mapCtrl.renderParentMarker();
-    showToast('Guardian Location Set', 'Guardian base set to your live GPS coordinates.', 'safe');
+    showToast('Guardian location set', 'Using your live GPS position.', 'safe');
   } else {
     window.useMyCurrentLocation('parent');
   }
@@ -862,125 +961,86 @@ window.setChildToLiveGPS = function() {
   const success = store.assignLiveLocationToChild(childId);
   if (success) {
     mapCtrl.renderChildrenMarkers();
-    showToast('Child Location Synced', 'Active child location set to your live GPS coordinates.', 'safe');
+    showToast('Child location synced', 'Using your live GPS position.', 'safe');
   } else {
     window.useMyCurrentLocation('child');
   }
 };
 
 /* =========================================================
-   Gmail Authentication UI Controller & Modal System
+   Guardian Account (Google sign-in) Modal
    ========================================================= */
+
+const GOOGLE_G = `
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.34 24 12 24z"/>
+    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
+    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+  </svg>
+`;
 
 window.openGmailLoginModal = function() {
   const state = store.get();
   const auth = state.auth || { isAuthenticated: false, email: 'vansh.koul@gmail.com' };
+  const name = auth.name || 'Vansh Koul';
 
   openModal(
-    '🔑 Guardian Account & Gmail Sign-In',
+    auth.isAuthenticated ? 'Guardian account' : 'Sign in',
     `
-      <div class="gmail-modal-wrapper">
-        <div class="gmail-modal-hero">
-          <div class="google-badge-avatar">
-            <span style="font-weight: 900; font-size: 1.6rem; color: #ea4335;">G</span>
+      ${auth.isAuthenticated ? `
+        <div class="account">
+          <span class="account__avatar">${name.charAt(0)}</span>
+          <div class="account__body">
+            <div class="account__name">${name}</div>
+            <div class="account__email">${auth.email}</div>
+            <div class="account__role">Primary guardian · Jammu, J&K</div>
           </div>
-          <div style="text-align: center;">
-            <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.2rem;">
-              ${auth.isAuthenticated ? 'Guardian Account Session' : 'Sign in with Google'}
-            </h3>
-            <p style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
-              Access live child safety signals, geofencing, and emergency alerts for Aarav, Anaya, and Kabir.
-            </p>
-          </div>
+          <span class="pill pill--safe pill--xs"><i class="dot"></i>Active</span>
         </div>
-
-        ${auth.isAuthenticated ? `
-          <div class="gmail-current-session-box">
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-              <div class="gmail-avatar-ring">V</div>
-              <div>
-                <div style="font-size: 0.95rem; font-weight: 800; color: var(--text-main);">${auth.name || 'Vansh Koul'}</div>
-                <div style="font-size: 0.78rem; color: #0284c7; font-weight: 600;">${auth.email}</div>
-                <div style="font-size: 0.7rem; color: var(--text-subtle);">Primary Guardian (Father) &bull; Jammu, J&K</div>
-              </div>
-            </div>
-            <span class="badge-pill" style="background: var(--safe-bg); color: #047857; border: 1px solid var(--safe-border);">Active</span>
-          </div>
-
-          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.85rem;">
-            <button class="btn btn-secondary" style="width: 100%; font-size: 0.82rem;" onclick="window.showToast('Account Synced', 'Google Workspace session verified.', 'safe'); window.closeModal();">
-              ✓ Continue as ${auth.name.split(' ')[0]}
-            </button>
-            <button class="btn btn-secondary" style="width: 100%; font-size: 0.82rem; color: #dc2626; border-color: rgba(220, 38, 38, 0.3);" onclick="window.logoutCurrentGmail();">
-              🚪 Sign Out of Gmail
-            </button>
-          </div>
-          <div style="text-align: center; margin-top: 0.8rem; font-size: 0.74rem; color: var(--text-muted);">
-            Or sign in with another Gmail ID below:
-          </div>
-        ` : ''}
-
-        <!-- 1-Tap Google Sign In -->
-        <div style="margin-top: 0.65rem;">
-          <button class="btn-google-sso" onclick="window.loginAsDemoVansh()">
-            <svg class="google-svg" viewBox="0 0 24 24" width="20" height="20">
-              <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
-              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.34 24 12 24z"/>
-              <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
-              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-            </svg>
-            <span>Continue with Google (vansh.koul@gmail.com)</span>
-          </button>
+        <button class="btn btn--danger-soft btn--block" onclick="window.logoutCurrentGmail();">${icon('logOut', 16)} Sign out</button>
+        <div class="divider"><span>or switch account</span></div>
+      ` : `
+        <div class="signin-hero">
+          <span class="signin-hero__mark">${icon('shieldCheck', 24)}</span>
+          <p class="modal__lede">Sign in to see live locations, safe zones and alerts for your family.</p>
         </div>
+      `}
 
-        <div class="auth-divider-line">
-          <span>or sign in with email</span>
-        </div>
+      <button class="btn btn--google btn--block" onclick="window.loginAsDemoVansh()">
+        ${GOOGLE_G}
+        <span>Continue with Google</span>
+      </button>
 
-        <!-- Custom Gmail ID Form -->
-        <form onsubmit="window.handleGmailFormSubmit(event)" class="gmail-form">
-          <div class="form-group" style="margin-bottom: 0.75rem;">
-            <label style="font-size: 0.78rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem; display: block;">
-              Gmail Address
-            </label>
-            <div style="position: relative;">
-              <input type="email" id="gmail-input-id" class="form-control" placeholder="name@gmail.com" required value="${auth.email || 'vansh.koul@gmail.com'}" style="padding-left: 2.2rem; width: 100%; border-radius: var(--radius-md);" />
-              <span style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); font-size: 1rem;">✉️</span>
-            </div>
-            <div style="display: flex; gap: 0.35rem; margin-top: 0.35rem;">
-              <button type="button" class="domain-pill" onclick="document.getElementById('gmail-input-id').value = 'vansh.koul@gmail.com'">
-                @vansh.koul
-              </button>
-              <button type="button" class="domain-pill" onclick="document.getElementById('gmail-input-id').value = 'vansh.guardian@gmail.com'">
-                @vansh.guardian
-              </button>
-            </div>
-          </div>
+      <div class="divider"><span>or use email</span></div>
 
-          <div class="form-group" style="margin-bottom: 0.9rem;">
-            <label style="font-size: 0.78rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem; display: block;">
-              Password
-            </label>
-            <div style="position: relative;">
-              <input type="password" id="gmail-input-pwd" class="form-control" placeholder="••••••••••••" value="SafeHavenGuardian2026" required style="padding-left: 2.2rem; width: 100%; border-radius: var(--radius-md);" />
-              <span style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); font-size: 1rem;">🔒</span>
-            </div>
-          </div>
-
-          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-size: 0.92rem; font-weight: 800; border-radius: var(--radius-md);">
-            Sign In with Gmail
-          </button>
-        </form>
-      </div>
+      <form onsubmit="window.handleGmailFormSubmit(event)" class="form">
+        <label class="field">
+          <span class="field__label">Email</span>
+          <span class="input-wrap">
+            ${icon('mail', 16)}
+            <input type="email" id="gmail-input-id" class="input" placeholder="name@gmail.com" required value="${auth.email || 'vansh.koul@gmail.com'}" autocomplete="email" />
+          </span>
+        </label>
+        <label class="field">
+          <span class="field__label">Password</span>
+          <span class="input-wrap">
+            ${icon('lock', 16)}
+            <input type="password" id="gmail-input-pwd" class="input" placeholder="Password" value="SafeHavenGuardian2026" required autocomplete="current-password" />
+          </span>
+        </label>
+        <button type="submit" class="btn btn--primary btn--block btn--lg">Sign in</button>
+      </form>
     `,
-    `<button class="btn btn-secondary" onclick="window.closeModal()">Close</button>`
+    '',
+    { size: 'sm' }
   );
 };
 
 window.loginAsDemoVansh = function() {
   store.loginWithGmail('vansh.koul@gmail.com', 'Vansh Koul');
   window.closeModal();
-  showToast('Google Sign-In Successful', 'Welcome back, Vansh Koul (Father & Guardian)', 'safe');
+  showToast('Signed in', 'Welcome back, Vansh.', 'safe');
 };
 
 window.handleGmailFormSubmit = function(e) {
@@ -991,22 +1051,20 @@ window.handleGmailFormSubmit = function(e) {
   if (!email) return;
 
   let displayName = 'Vansh Koul';
-  if (email.toLowerCase().includes('vansh')) {
-    displayName = 'Vansh Koul';
-  } else {
+  if (!email.toLowerCase().includes('vansh')) {
     const userPart = email.split('@')[0];
     displayName = userPart.charAt(0).toUpperCase() + userPart.slice(1);
   }
 
   store.loginWithGmail(email, displayName);
   window.closeModal();
-  showToast('Signed In with Gmail', `Authenticated as ${email}`, 'safe');
+  showToast('Signed in', email, 'safe');
 };
 
 window.logoutCurrentGmail = function() {
   store.logoutGmail();
   window.closeModal();
-  showToast('Signed Out', 'Guardian session locked. Sign in to view telemetry.', 'info');
+  showToast('Signed out', 'Sign in again to view your family.', 'info');
 };
 
 /* =========================================================
@@ -1019,39 +1077,38 @@ window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
   const installBtn = document.getElementById('pwa-install-btn');
-  if (installBtn) {
-    installBtn.style.display = 'inline-flex';
-    installBtn.classList.add('pulse-ready');
-  }
+  if (installBtn) installBtn.hidden = false;
 });
 
 window.promptPWAInstall = async function() {
+  let prompted = false;
   if (deferredInstallPrompt) {
-    deferredInstallPrompt.prompt();
-    const { outcome } = await deferredInstallPrompt.userChoice;
-    if (outcome === 'accepted') {
-      showToast('App Installed', 'SafeHaven is now installed on your device!', 'safe');
+    try {
+      await deferredInstallPrompt.prompt();
+      prompted = true;
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      if (outcome === 'accepted') {
+        showToast('Installed', 'SafeHaven is now on your device.', 'safe');
+      }
+      deferredInstallPrompt = null;
+    } catch (err) {
+      // Browser refused the native prompt (e.g. no user gesture) — fall back to manual instructions
+      console.warn('Install prompt unavailable:', err.message);
     }
-    deferredInstallPrompt = null;
-  } else {
-    // Show instruction modal for browsers that don't support automated prompt
+  }
+  if (!prompted) {
     openModal(
-      '📲 Install SafeHaven App',
+      'Install SafeHaven',
       `
-        <div style="text-align: center; padding: 0.5rem 0;">
-          <div style="font-size: 3rem; margin-bottom: 0.5rem;">📱</div>
-          <h4 style="font-size: 1.05rem; font-weight: 800; margin-bottom: 0.4rem; color: var(--text-main);">Install as Official App</h4>
-          <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1rem;">
-            SafeHaven runs as a standalone Progressive Web App with 24/7 background syncing, offline caching, and instant launch from your home screen or desktop.
-          </p>
-          <div style="text-align: left; background: var(--bg-subtle); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.85rem; font-size: 0.78rem; line-height: 1.6; color: var(--text-main);">
-            <strong>Desktop Chrome / Edge:</strong> Click the <strong>Install</strong> icon (💻/➕) in your browser address bar.<br/>
-            <strong>iOS (Safari):</strong> Tap <strong>Share</strong> (⬆️) and select <strong>"Add to Home Screen"</strong>.<br/>
-            <strong>Android (Chrome):</strong> Tap <strong>Menu (⋮)</strong> and select <strong>"Install App"</strong>.
-          </div>
-        </div>
+        <p class="modal__lede">Install SafeHaven as an app for instant launch, offline support and background alerts.</p>
+        <ol class="steps">
+          <li><strong>Chrome or Edge (desktop)</strong><span>Click the install icon at the right of the address bar.</span></li>
+          <li><strong>Safari (iPhone)</strong><span>Tap Share, then “Add to Home Screen”.</span></li>
+          <li><strong>Chrome (Android)</strong><span>Open the ⋮ menu and choose “Install app”.</span></li>
+        </ol>
       `,
-      `<button class="btn btn-primary" style="width: 100%;" onclick="window.closeModal()">Got it</button>`
+      `<button class="btn btn--primary btn--block" onclick="window.closeModal()">Got it</button>`,
+      { size: 'sm' }
     );
   }
 };
@@ -1059,11 +1116,10 @@ window.promptPWAInstall = async function() {
 window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
   const installBtn = document.getElementById('pwa-install-btn');
-  if (installBtn) installBtn.style.display = 'none';
-  showToast('SafeHaven Active', 'Installed as standalone application.', 'safe');
+  if (installBtn) installBtn.hidden = true;
+  showToast('Installed', 'SafeHaven is running as an app.', 'safe');
 });
 
-// Register Service Worker
 if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
@@ -1077,30 +1133,35 @@ if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || win
 }
 
 // -------------------------------------------------------------
-// PROFILE PICKER WINDOW CONTROLLER
+// PROFILE PICKER
 // -------------------------------------------------------------
+
+window.selectChildProfile = function(childId) {
+  store.update({ selectedChildId: childId });
+  closeModal();
+  const c = store.getChild(childId);
+  if (c) showToast('Profile switched', `Now showing ${c.name}`, 'info');
+};
 
 window.openChildPickerModal = function() {
   const state = store.get();
   openModal(
-    '👨‍👧‍👦 Select Child Profile',
+    'Choose a child',
     `
-      <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+      <div class="choices">
         ${state.children.map(c => `
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: ${c.id === state.selectedChildId ? 'var(--primary-light)' : 'var(--bg-subtle)'}; border: 1px solid ${c.id === state.selectedChildId ? 'var(--primary)' : 'var(--border-light)'}; border-radius: 14px; cursor: pointer;"
-               onclick="store.update({ selectedChildId: '${c.id}' }); window.closeModal(); showToast('Profile Switched', 'Now focusing on ${c.name}', 'info');">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <img src="${c.avatar}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" />
-              <div>
-                <strong style="color: var(--text-main); font-size: 0.92rem;">${c.name}</strong>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">${c.grade || `${c.age} years old`} &bull; ${c.device}</div>
-              </div>
-            </div>
-            ${c.id === state.selectedChildId ? '<span style="color: var(--primary); font-weight: 800; font-size: 1.1rem;">✓</span>' : ''}
-          </div>
+          <button class="choice ${c.id === state.selectedChildId ? 'is-selected' : ''}" onclick="window.selectChildProfile('${c.id}')">
+            <span class="avatar avatar--sm"><img src="${c.avatar}" alt="" /></span>
+            <span class="choice__body">
+              <span class="choice__title">${c.name}</span>
+              <span class="choice__sub">${clean(c.grade) || `${c.age} years old`}</span>
+            </span>
+            ${c.id === state.selectedChildId ? icon('check', 18, 'choice__check') : ''}
+          </button>
         `).join('')}
       </div>
     `,
-    `<button class="btn btn-secondary" style="width: 100%;" onclick="window.closeModal()">Cancel</button>`
+    `<button class="btn btn--soft btn--block" onclick="window.closeModal()">Cancel</button>`,
+    { size: 'sm' }
   );
 };

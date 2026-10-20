@@ -3,3 +3,7 @@ test_app_logic.js
 *.bat
 *.vbs
 .agents
+*.zip
+node_modules
+.env
+.claude

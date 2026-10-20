@@ -5,12 +5,14 @@
 
 import { store } from './state.js';
 import { soundFx } from './audioNotifier.js';
+import { icon, clean, short, batteryMeter } from './icons.js';
+
+const SOS_HOLD_SECONDS = 3;
 
 export class ChildUI {
   constructor() {
     this.container = null;
-    this.holdTimer = null;
-    this.holdProgress = 0;
+    this.isHolding = false;
   }
 
   mount(containerId = 'child-content-area') {
@@ -19,7 +21,8 @@ export class ChildUI {
 
     this.render();
     store.subscribe(() => {
-      this.render();
+      // Don't rebuild the SOS button out from under a finger that's holding it
+      if (!this.isHolding) this.render();
     });
   }
 
@@ -28,116 +31,108 @@ export class ChildUI {
     const state = store.get();
     const child = store.getChild(state.selectedChildId);
     const zone = state.safeZones.find(z => z.id === child.currentZoneId);
+    const guardian = state.parent.name.split(' ')[0];
 
     const isSOSActive = state.activeSosAlert && state.activeSosAlert.childId === child.id;
 
-    let heroStatusClass = 'safe';
-    let heroIcon = '🛡️';
-    let heroTitle = "You're in a Safe Zone";
-    let heroDesc = zone ? `You are at ${zone.name} (${zone.address}). Dad (${state.parent.name}) knows you're safe here.` : `You're safe. Location is being shared with Dad (${state.parent.name}).`;
+    let tone = 'safe';
+    let heroIcon = 'shieldCheck';
+    let heroTitle = "You're in a safe zone";
+    let heroDesc = zone
+      ? `You're at ${clean(zone.name)}. Dad knows you're safe here.`
+      : `You're safe. Your location is being shared with Dad.`;
 
     if (child.safetyStatus === 'attention') {
-      heroStatusClass = 'attention';
-      heroIcon = '📍';
-      heroTitle = 'Outside Safe Zone';
-      heroDesc = `You're outside your usual safe areas. If you need a ride or help, call Dad (${state.parent.name})!`;
-    } else if (child.safetyStatus === 'danger' || isSOSActive) {
-      heroStatusClass = 'danger';
-      heroIcon = '🚨';
-      heroTitle = 'EMERGENCY MODE ACTIVE';
-      heroDesc = 'Dad and emergency dispatch (112) are notified of your location. Stay calm and stay where you are.';
+      tone = 'attention';
+      heroIcon = 'pin';
+      heroTitle = "You're outside your safe zones";
+      heroDesc = `That's okay — if you need a ride or any help, call Dad straight away.`;
+    }
+    if (child.safetyStatus === 'danger' || isSOSActive) {
+      tone = 'danger';
+      heroIcon = 'siren';
+      heroTitle = 'Help is on the way';
+      heroDesc = 'Dad and emergency services (112) can see where you are. Stay calm and stay where you are if it is safe.';
     }
 
+    const ringR = 54;
+    const ringC = (2 * Math.PI * ringR).toFixed(1);
+
     this.container.innerHTML = `
-      <div class="child-view">
-        <!-- Child Header -->
-        <div class="child-top-bar">
-          <div class="child-profile-mini">
-            <div class="child-avatar-lg" style="background: ${child.color};">
-              ${child.name.charAt(0)}
-            </div>
-            <div class="child-profile-text">
-              <h2>${child.name}'s Safety</h2>
-              <p>Protected by Dad (${state.parent.name})</p>
-            </div>
+      <div class="kid">
+        <header class="kid-head">
+          <span class="avatar avatar--lg ring-${tone}"><img src="${child.avatar}" alt="" /></span>
+          <div class="kid-head__text">
+            <p class="eyebrow">My safety</p>
+            <h1 class="kid-head__title">Hi, ${child.name}</h1>
+            <span class="zone-badge tone-${tone}">${icon(tone === 'safe' ? 'shieldCheck' : tone === 'danger' ? 'siren' : 'pin', 13)}${
+              tone === 'danger' ? 'Emergency mode' : zone ? `Safe zone — ${clean(zone.name)}` : 'Outside safe zones'}</span>
           </div>
-          <div class="child-device-status-badge">
-            <span>🔋 ${child.battery}%</span>
-            <span>&bull;</span>
-            <span>📶 ${child.signal}</span>
+          <div class="kid-device">
+            <span>${batteryMeter(child.battery)} ${child.battery}%</span>
+            <span>${icon('signal', 13)} ${short(child.signal)}</span>
           </div>
+        </header>
+
+        <div class="kid-privacy">
+          ${icon('lock', 15)}
+          <span>Dad (${guardian}) can see your location. Nothing else — no microphone, no camera.</span>
         </div>
 
-        <!-- Privacy Transparency Badge -->
-        <div class="privacy-transparency-pill">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-          </svg>
-          <span>Location sharing is active with Dad (${state.parent.name}). Zero secret listening or camera tracking.</span>
-        </div>
+        <section class="kid-status tone-${tone}">
+          <span class="kid-status__icon">${icon(heroIcon, 26)}</span>
+          <h2 class="kid-status__title">${heroTitle}</h2>
+          <p class="kid-status__desc">${heroDesc}</p>
+          <p class="kid-status__meta">Updated just now · ${clean(child.gpsAccuracy)}</p>
+        </section>
 
-        <!-- Safety Status Hero Card -->
-        <div class="child-safety-hero-card ${heroStatusClass}">
-          <div class="safety-hero-icon">${heroIcon}</div>
-          <div class="safety-hero-title">${heroTitle}</div>
-          <div class="safety-hero-desc">${heroDesc}</div>
-          <div style="font-size: 0.72rem; color: var(--text-subtle); margin-top: 0.25rem;">
-            Last location sync: Just now &bull; Accuracy: ${child.gpsAccuracy}
-          </div>
-        </div>
-
-        <!-- SOS Trigger Section -->
-        <div class="sos-section">
+        <section class="sos-zone">
           ${isSOSActive ? `
-            <div style="text-align: center; width: 100%;">
-              <button class="btn btn-danger" style="width: 100%; padding: 1rem; font-size: 1.1rem; margin-bottom: 0.75rem;" onclick="window.callEmergencyServices()">
-                🚨 Call 112 Emergency Direct
-              </button>
-              <button class="btn btn-secondary" style="width: 100%;" onclick="window.cancelChildSOS()">
-                Cancel False Alarm
-              </button>
+            <div class="sos-active">
+              <button class="btn btn--danger btn--lg btn--block" onclick="window.callEmergencyServices()">${icon('phone', 18)} Call 112 now</button>
+              <button class="btn btn--soft btn--block" onclick="window.cancelChildSOS()">It was a mistake — cancel SOS</button>
             </div>
           ` : `
-            <div id="sos-button" class="sos-hold-button" title="Hold for 3 seconds to trigger emergency">
-              <span class="sos-text-main">SOS</span>
-              <span class="sos-text-sub">Hold 3s</span>
-            </div>
-            <div class="sos-instruction-text">
-              Press and hold for 3 seconds in an emergency
-            </div>
+            <button id="sos-button" class="sos" aria-label="Emergency SOS. Press and hold for ${SOS_HOLD_SECONDS} seconds." style="--hold:${SOS_HOLD_SECONDS}s">
+              <svg class="sos__ring" viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="sos__track" cx="60" cy="60" r="${ringR}" />
+                <circle class="sos__progress" cx="60" cy="60" r="${ringR}" stroke-dasharray="${ringC}" stroke-dashoffset="${ringC}" style="--c:${ringC}" />
+              </svg>
+              <span class="sos__label">SOS</span>
+              <span class="sos__sub">Hold ${SOS_HOLD_SECONDS}s</span>
+            </button>
+            <p class="sos-hint">Press and hold in an emergency. Dad and 112 will be alerted.</p>
           `}
-        </div>
+        </section>
 
-        <!-- Secondary Action Buttons -->
-        <div class="child-actions-grid">
-          <button class="child-big-btn btn-im-safe" onclick="window.childSendImSafe()">
-            <div class="child-btn-icon-box safe-bg">✅</div>
-            <div class="child-btn-label">I'm Safe</div>
-            <div class="child-btn-hint">Notify parents with 1 tap</div>
+        <div class="kid-actions">
+          <button class="kid-action tone-safe" onclick="window.childSendImSafe()">
+            <span class="kid-action__icon">${icon('checkCircle', 22)}</span>
+            <span class="kid-action__label">I'm safe</span>
+            <span class="kid-action__hint">Let Dad know</span>
           </button>
-
-          <button class="child-big-btn" onclick="window.openCallParentModal()">
-            <div class="child-btn-icon-box phone-bg">📞</div>
-            <div class="child-btn-label">Call Dad</div>
-            <div class="child-btn-hint">Dad (${state.parent.name.split(' ')[0]})</div>
+          <a class="kid-action tone-accent" href="tel:${(state.parent.phone || '').replace(/\s+/g, '')}" onclick="window.childCallGuardian()">
+            <span class="kid-action__icon">${icon('phone', 22)}</span>
+            <span class="kid-action__label">Call Dad (${guardian})</span>
+            <span class="kid-action__hint">One tap to call</span>
+          </a>
+          <button class="kid-action tone-info" onclick="window.childShareLiveLocation()">
+            <span class="kid-action__icon">${icon('locate', 22)}</span>
+            <span class="kid-action__label">Share location</span>
+            <span class="kid-action__hint">Send a live update</span>
           </button>
-
-          <button class="child-big-btn" onclick="window.childShareLiveLocation()">
-            <div class="child-btn-icon-box pin-bg">📍</div>
-            <div class="child-btn-label">Share Location</div>
-            <div class="child-btn-hint">Send live GPS ping</div>
-          </button>
-
-          <button class="child-big-btn" onclick="window.switchTab('map')">
-            <div class="child-btn-icon-box" style="background: #e0f2fe; color: #0284c7;">🗺️</div>
-            <div class="child-btn-label">View Safe Zones</div>
-            <div class="child-btn-hint">See nearby approved places</div>
+          <button class="kid-action tone-neutral" onclick="window.openChildZonesModal()">
+            <span class="kid-action__icon">${icon('shield', 22)}</span>
+            <span class="kid-action__label">Safe places</span>
+            <span class="kid-action__hint">Where you're covered</span>
           </button>
         </div>
 
-        <div id="child-toast-notice" style="display: none;" class="im-safe-notification">
-          <span>❤️ Mom & Dad have been notified that you're safe!</span>
+        <button class="link-btn kid-more" onclick="window.openCallParentModal()">Call someone else ${icon('chevronRight', 14)}</button>
+
+        <div id="child-toast-notice" class="kid-notice" hidden>
+          ${icon('heart', 16)}
+          <span>Mom and Dad know you're safe.</span>
         </div>
       </div>
     `;
@@ -149,45 +144,51 @@ export class ChildUI {
     const sosBtn = document.getElementById('sos-button');
     if (!sosBtn) return;
 
-    let holdStartTime = 0;
+    let holdStart = 0;
     let holdInterval = null;
+    const sub = sosBtn.querySelector('.sos__sub');
 
     const startHold = (e) => {
       e.preventDefault();
-      holdStartTime = Date.now();
+      if (holdInterval) return;
+      this.isHolding = true;
+      holdStart = Date.now();
       sosBtn.classList.add('holding');
 
       holdInterval = setInterval(() => {
-        const elapsed = (Date.now() - holdStartTime) / 1000;
-        if (elapsed >= 2.5) {
+        const elapsed = (Date.now() - holdStart) / 1000;
+        if (elapsed >= SOS_HOLD_SECONDS) {
           clearInterval(holdInterval);
+          holdInterval = null;
+          this.isHolding = false;
           sosBtn.classList.remove('holding');
           this.triggerSOS();
-        } else {
-          const remaining = (3 - elapsed).toFixed(1);
-          const subText = sosBtn.querySelector('.sos-text-sub');
-          if (subText) subText.textContent = `${remaining}s...`;
+        } else if (sub) {
+          sub.textContent = `${Math.ceil(SOS_HOLD_SECONDS - elapsed)}…`;
         }
       }, 100);
     };
 
-    const endHold = (e) => {
+    const endHold = () => {
       if (holdInterval) {
         clearInterval(holdInterval);
         holdInterval = null;
       }
+      const wasHolding = this.isHolding;
+      this.isHolding = false;
       sosBtn.classList.remove('holding');
-      const subText = sosBtn.querySelector('.sos-text-sub');
-      if (subText) subText.textContent = 'Hold 3s';
+      if (sub) sub.textContent = `Hold ${SOS_HOLD_SECONDS}s`;
+      if (wasHolding) this.render();
     };
 
     sosBtn.addEventListener('mousedown', startHold);
     sosBtn.addEventListener('mouseup', endHold);
     sosBtn.addEventListener('mouseleave', endHold);
-
     sosBtn.addEventListener('touchstart', startHold, { passive: false });
     sosBtn.addEventListener('touchend', endHold);
     sosBtn.addEventListener('touchcancel', endHold);
+    sosBtn.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) startHold(e); });
+    sosBtn.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') endHold(); });
   }
 
   triggerSOS() {

@@ -3,25 +3,21 @@
    Offline Emergency Resiliency, Telemetry & Asset Caching
    ========================================================= */
 
-const CACHE_NAME = 'safehaven-cache-v10';
+const CACHE_NAME = 'safehaven-cache-v17';
 
 const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './css/style.css',
-  './css/parent.css',
-  './css/child.css',
-  './css/map.css',
-  './css/premium.css',
+  './css/app.css',
   './js/app.js',
   './js/state.js',
   './js/parentUI.js',
   './js/childUI.js',
   './js/mapController.js',
   './js/safetyEngine.js',
-  './js/simulator.js',
   './js/audioNotifier.js',
+  './js/icons.js',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js',
   './assets/icons/icon.svg',
@@ -60,7 +56,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch: Cache-First for static assets, Stale-While-Revalidate for tiles
+// 3. Fetch: Network-First for app files, Stale-While-Revalidate for tiles & fonts
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
@@ -68,27 +64,16 @@ self.addEventListener('fetch', (event) => {
   // Only handle GET requests
   if (req.method !== 'GET') return;
 
-  // Local assets: Cache-First with Network fallback
+  // Local assets: Network-First so updates land immediately; cache keeps the app working offline
   if (url.origin === self.location.origin) {
     event.respondWith(
-      caches.match(req).then((cachedResponse) => {
-        if (cachedResponse) {
-          // Stale-while-revalidate in background
-          fetch(req).then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              caches.open(CACHE_NAME).then((cache) => cache.put(req, networkResponse));
-            }
-          }).catch(() => {/* offline */});
-          return cachedResponse;
+      fetch(req).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
         }
-        return fetch(req).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const clone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-          }
-          return networkResponse;
-        });
-      })
+        return networkResponse;
+      }).catch(() => caches.match(req).then((cached) => cached || caches.match('./index.html')))
     );
     return;
   }

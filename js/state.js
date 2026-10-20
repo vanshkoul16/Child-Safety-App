@@ -10,35 +10,9 @@ const INITIAL_STATE = {
   activeMode: 'parent', // 'parent' or 'child'
   activeParentTab: 'home', // 'home' | 'map' | 'alerts' | 'zones' | 'children' | 'settings'
   selectedChildId: 'c1',
-  isMobilePreview: true, // Default to true on desktop so user can preview mobile app view immediately
   theme: 'light',
   isAudioMuted: false,
   mapStyle: 'google_streets', // 'google_streets' | 'google_hybrid' | 'google_terrain'
-
-  // Apple Screen Time & Time Allowances
-  timeAllowances: {
-    activeDayType: 'weekdays', // 'weekdays' | 'weekends'
-    c1: {
-      weekdays: {
-        sharedAllowanceMinutes: 60, // 1 hour
-        categories: {
-          entertainment: 60, // Up to 1 hour
-          games: 60,         // Up to 1 hour
-          socialMedia: 30,   // Up to 30m
-          education: 120
-        }
-      },
-      weekends: {
-        sharedAllowanceMinutes: 120, // 2 hours
-        categories: {
-          entertainment: 90,
-          games: 90,
-          socialMedia: 60,
-          education: 180
-        }
-      }
-    }
-  },
 
   // Gmail Authentication Session
   auth: {
@@ -331,10 +305,13 @@ const INITIAL_STATE = {
       safeZoneAlerts: true,
       batteryAlerts: true,
       arrivalDeparture: true,
-      locationUnavailable: true
+      locationUnavailable: true,
+      push: false,           // system notifications on this device
+      sms: true              // SMS to emergency contacts on SOS
     },
     privacy: {
       historyRetentionDays: 30,
+      locationSharingMode: 'always', // 'always' | 'moving' | 'sos'
       explicitConsentGranted: true,
       allowLiveSharing: true,
       noCovertSurveillanceNotice: true
@@ -495,8 +472,9 @@ class StateManager {
     this.save();
   }
 
-  triggerSOS(childId) {
+  triggerSOS(childId, source = 'child') {
     const child = this.getChild(childId);
+    const byGuardian = source === 'guardian';
     const sosAlert = {
       id: 'sos-' + Date.now(),
       childId: child.id,
@@ -507,15 +485,18 @@ class StateManager {
       battery: child.battery,
       lat: child.lat,
       lng: child.lng,
-      what: `${child.name} manually activated Emergency SOS on ${child.device}!`,
-      evidence: `Hardware emergency trigger at (${child.lat.toFixed(4)}° N, ${child.lng.toFixed(4)}° E). Battery: ${child.battery}%. Dual-frequency GNSS accuracy: ±1.8m. First responders alerted (112 Standby).`,
+      raisedBy: source,
+      what: byGuardian
+        ? `${this.state.parent.name} raised an emergency SOS for ${child.name} from the guardian dashboard.`
+        : `${child.name} manually activated Emergency SOS on ${child.device}!`,
+      evidence: `${byGuardian ? 'Guardian-raised emergency' : 'Hardware emergency trigger'} at (${child.lat.toFixed(4)}° N, ${child.lng.toFixed(4)}° E). Battery: ${child.battery}%. Dual-frequency GNSS accuracy: ±1.8m. First responders alerted (112 Standby).`,
       severity: 'Critical (Priority 1 Emergency)',
       recommendedAction: `Call ${child.name} immediately (${child.phone}) or contact Jammu 112 emergency dispatch.`
     };
 
     this.updateChild(child.id, {
       safetyStatus: 'danger',
-      statusReason: '🚨 Emergency SOS button activated by child.'
+      statusReason: byGuardian ? 'Emergency SOS raised by guardian.' : 'Emergency SOS button activated by child.'
     });
 
     this.addAlert(sosAlert);
@@ -629,59 +610,6 @@ class StateManager {
       details: `Session closed for ${this.state.auth.email}`
     });
     this.save();
-  }
-
-  /* Apple Screen Time & Time Allowances Handlers */
-  setTimeAllowanceDayType(dayType) {
-    const current = this.state.timeAllowances || {};
-    this.update({
-      timeAllowances: {
-        ...current,
-        activeDayType: dayType
-      }
-    });
-  }
-
-  updateSharedAllowance(childId, minutes) {
-    const current = this.state.timeAllowances || {};
-    const childIdKey = childId || this.state.selectedChildId || 'c1';
-    const childSettings = current[childIdKey] || {
-      weekdays: { sharedAllowanceMinutes: 60, categories: { entertainment: 60, games: 60, socialMedia: 30, education: 120 } },
-      weekends: { sharedAllowanceMinutes: 120, categories: { entertainment: 90, games: 90, socialMedia: 60, education: 180 } }
-    };
-    const activeDay = current.activeDayType || 'weekdays';
-    if (!childSettings[activeDay]) childSettings[activeDay] = { sharedAllowanceMinutes: 60, categories: {} };
-    childSettings[activeDay].sharedAllowanceMinutes = Math.max(0, Math.min(360, parseInt(minutes, 10)));
-
-    this.update({
-      timeAllowances: {
-        ...current,
-        [childIdKey]: childSettings
-      }
-    });
-  }
-
-  updateCategoryAllowance(childId, categoryKey, deltaMinutes) {
-    const current = this.state.timeAllowances || {};
-    const childIdKey = childId || this.state.selectedChildId || 'c1';
-    const childSettings = current[childIdKey] || {
-      weekdays: { sharedAllowanceMinutes: 60, categories: { entertainment: 60, games: 60, socialMedia: 30, education: 120 } },
-      weekends: { sharedAllowanceMinutes: 120, categories: { entertainment: 90, games: 90, socialMedia: 60, education: 180 } }
-    };
-    const activeDay = current.activeDayType || 'weekdays';
-    if (!childSettings[activeDay]) childSettings[activeDay] = { sharedAllowanceMinutes: 60, categories: {} };
-    const cats = childSettings[activeDay].categories || { entertainment: 60, games: 60, socialMedia: 30 };
-    const currentVal = cats[categoryKey] !== undefined ? cats[categoryKey] : 60;
-    const newVal = Math.max(0, Math.min(360, currentVal + deltaMinutes));
-    cats[categoryKey] = newVal;
-    childSettings[activeDay].categories = cats;
-
-    this.update({
-      timeAllowances: {
-        ...current,
-        [childIdKey]: childSettings
-      }
-    });
   }
 
   resetToDefaults() {

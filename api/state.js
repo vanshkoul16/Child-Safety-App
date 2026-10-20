@@ -2,6 +2,7 @@ const { getDb, preflight } = require('./_db');
 
 module.exports = async (req, res) => {
   if (preflight(req, res)) return;
+  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const db = await getDb();
     const col = db.collection('app_state');
@@ -14,7 +15,6 @@ module.exports = async (req, res) => {
       await col.updateOne({ _id: 'global' }, { $set: { state, updatedAt: Date.now() } }, { upsert: true });
       return res.status(200).json({ success: true, message: 'State synced to server' });
     }
-    res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
     console.error('state error:', err.message);
     res.status(500).json({ error: 'Failed to sync state' });
