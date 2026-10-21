@@ -601,7 +601,7 @@ input, select, textarea { font: inherit; color: inherit; }
   box-shadow: 0 0 0 2px var(--bg);
 }
 
-.sidenav__foot { margin-top: auto; padding-top: 16px; }
+.sidenav__foot { margin-top: 10px; padding-top: 0; }
 .sidenav__sos {
   display: flex;
   align-items: center;
