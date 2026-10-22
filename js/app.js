@@ -9,6 +9,7 @@ import { mapCtrl } from './mapController.js';
 import { soundFx } from './audioNotifier.js';
 import { safetyEngine } from './safetyEngine.js';
 import { icon, zoneIcon, clean } from './icons.js';
+import { needsPermissionSetup, openPermissionSetup, startFallDetection, sosCapture } from './permissions.js';
 
 const TOAST_ICONS = { info: 'info', critical: 'siren', warning: 'alert', safe: 'checkCircle' };
 
@@ -62,7 +63,10 @@ export function showToast(title, message, type = 'info') {
 window.showToast = showToast;
 
 // Global Modal Controller
+let modalOnClose = null;
+
 export function openModal(title, bodyHtml, footerHtml = '', opts = {}) {
+  modalOnClose = opts.onClose || null;
   let overlay = document.getElementById('global-modal-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -98,6 +102,9 @@ export function closeModal() {
   }
   document.body.classList.remove('has-modal');
   mapCtrl.disableLocationPicker();
+  const onClose = modalOnClose;
+  modalOnClose = null;
+  if (onClose) onClose();
 }
 window.closeModal = closeModal;
 
@@ -204,7 +211,62 @@ function initApp() {
     }
   });
 
+  // During an SOS keep the screen on; a child-raised SOS also records a short clip on the child's device
+  store.update({ sosRecording: false });
+  const syncSosCapture = (state) => {
+    const sos = state.activeSosAlert;
+    if (sos) sosCapture.start(sos, { record: sos.raisedBy !== 'guardian' });
+    else sosCapture.stop();
+  };
+  store.subscribe(syncSosCapture);
+  syncSosCapture(store.get());
+
   initBackendSync();
+  startFallDetection();
+  if (needsPermissionSetup()) openPermissionSetup({ openModal, onClose: requestLocationOnOpen });
+  else requestLocationOnOpen();
+}
+
+window.openPermissionSetup = () => openPermissionSetup({ openModal });
+
+window.playSosRecording = function(alertId) {
+  const url = sosCapture.clips[alertId];
+  if (!url) return;
+  openModal(
+    'SOS recording',
+    `<p class="modal__lede">Recorded on the child's phone while the SOS was active. It is kept only until this page is closed.</p>
+     <video class="sos-clip" src="${url}" controls playsinline autoplay></video>`,
+    `<a class="btn btn--soft" href="${url}" download="safehaven-sos-${alertId}.webm">${icon('download', 16)} Save copy</a>
+     <button class="btn btn--primary" onclick="window.closeModal()">Close</button>`
+  );
+};
+
+// Ask for location access as soon as the site opens (the browser only prompts while the choice is undecided)
+async function requestLocationOnOpen() {
+  if (!('geolocation' in navigator)) return;
+
+  let firstAsk = true;
+  try {
+    const status = await navigator.permissions.query({ name: 'geolocation' });
+    firstAsk = status.state === 'prompt';
+  } catch (e) {
+    // Permissions API unavailable: treat as a first request
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      store.updateUserLiveLocation({ lat: latitude, lng: longitude, accuracy });
+      if (mapCtrl.map) mapCtrl.renderLiveUserMarker();
+      if (firstAsk) showToast('Location on', `Accurate to ${Math.round(accuracy)} m`, 'safe');
+    },
+    (err) => {
+      if (err.code === 1 && firstAsk) {
+        showToast('Location off', 'You can allow location later from the address bar.', 'warning');
+      }
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+  );
 }
 
 async function initBackendSync() {
@@ -269,6 +331,7 @@ function renderEmergencyBroadcast(state) {
             <div><dt>Battery</dt><dd>${child.battery}%</dd></div>
             <div><dt>Device</dt><dd>${clean(child.device).split(' (')[0]}</dd></div>
             <div><dt>Evidence</dt><dd>${clean(alert.evidence)}</dd></div>
+            ${alert.raisedBy !== 'guardian' ? `<div><dt>Recording</dt><dd>${state.sosRecording ? 'Recording audio and video on the child\'s phone (up to 60 s)' : sosCapture.clips[alert.id] ? 'Clip saved — play it from Alerts' : 'No recording (camera or microphone not allowed)'}</dd></div>` : ''}
           </dl>
         </div>
 

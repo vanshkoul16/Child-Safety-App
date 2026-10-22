@@ -3,7 +3,7 @@
    Offline Emergency Resiliency, Telemetry & Asset Caching
    ========================================================= */
 
-const CACHE_NAME = 'safehaven-cache-v17';
+const CACHE_NAME = 'safehaven-cache-v20';
 
 const CORE_ASSETS = [
   './',
@@ -18,6 +18,7 @@ const CORE_ASSETS = [
   './js/safetyEngine.js',
   './js/audioNotifier.js',
   './js/icons.js',
+  './js/permissions.js',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js',
   './assets/icons/icon.svg',
@@ -25,6 +26,7 @@ const CORE_ASSETS = [
   './assets/icons/icon-512.png',
   './assets/icons/icon-maskable.png',
   './assets/avatars/aarav.jpg',
+  './assets/avatars/anneliese.jpg',
   './assets/avatars/anaya.jpg',
   './assets/avatars/kabir.jpg',
   './assets/avatars/sarah.jpg'

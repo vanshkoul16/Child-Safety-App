@@ -76,7 +76,7 @@ export class ChildUI {
 
         <div class="kid-privacy">
           ${icon('lock', 15)}
-          <span>Dad (${guardian}) can see your location. Nothing else — no microphone, no camera.</span>
+          <span>Dad (${guardian}) can see your location. The camera and microphone only turn on during an SOS.</span>
         </div>
 
         <section class="kid-status tone-${tone}">
@@ -89,6 +89,7 @@ export class ChildUI {
         <section class="sos-zone">
           ${isSOSActive ? `
             <div class="sos-active">
+              ${state.sosRecording ? `<p class="sos-recording"><span class="sos-recording__dot"></span>Recording audio and video for your safety. It stops when the SOS ends.</p>` : ''}
               <button class="btn btn--danger btn--lg btn--block" onclick="window.callEmergencyServices()">${icon('phone', 18)} Call 112 now</button>
               <button class="btn btn--soft btn--block" onclick="window.cancelChildSOS()">It was a mistake — cancel SOS</button>
             </div>

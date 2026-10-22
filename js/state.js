@@ -47,7 +47,7 @@ const INITIAL_STATE = {
       name: 'Anneliese',
       age: 10,
       gender: 'F',
-      avatar: 'assets/avatars/anaya.jpg',
+      avatar: 'assets/avatars/anneliese.jpg',
       grade: '5th Grade • Delhi Public School (DPS) Jammu',
       color: '#2563eb',
       device: 'Apple iPhone 15 Pro (128GB, Natural Titanium)',
@@ -357,6 +357,10 @@ class StateManager {
             alerts: Array.isArray(parsed.alerts) ? parsed.alerts : INITIAL_STATE.alerts
           };
           merged.parent.avatar = INITIAL_STATE.parent.avatar;
+          merged.children.forEach((child) => {
+            const seed = INITIAL_STATE.children.find((c) => c.id === child.id);
+            if (seed) child.avatar = seed.avatar;
+          });
           return merged;
         }
       }

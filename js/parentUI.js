@@ -5,6 +5,7 @@
 import { store } from './state.js';
 import { mapCtrl } from './mapController.js';
 import { icon, zoneIcon, clean, short, timeAgo, statusOf, batteryMeter, signalBars } from './icons.js';
+import { sosCapture } from './permissions.js';
 
 const ALERT_FILTERS = [
   { key: 'all', label: 'All' },
@@ -378,7 +379,7 @@ export class ParentUI {
         ${children.map(child => this._renderChildCard(child, state)).join('')}
       </div>
 
-      <p class="trust-note">${icon('eyeOff', 15)} Children always see when their location is shared. No covert listening, camera access or keystroke logging — ever.</p>
+      <p class="trust-note">${icon('eyeOff', 15)} Children always see when their location is shared. Camera and microphone record only during an SOS — no covert listening or keystroke logging, ever.</p>
     `;
   }
 
@@ -505,6 +506,7 @@ export class ParentUI {
                 </details>
 
                 <div class="alert-card__actions">
+                  ${sosCapture.clips[alert.id] ? `<button class="btn btn--soft btn--sm" onclick="window.playSosRecording('${alert.id}')">${icon('play', 15)} Play recording</button>` : ''}
                   <button class="btn btn--soft btn--sm" onclick="window.locateChild('${alert.childId}')">${icon('map', 15)} View on map</button>
                   <button class="btn btn--soft btn--sm" onclick="window.callChildPhone('${name}')">${icon('phone', 15)} Call</button>
                   <button class="btn btn--ghost btn--sm" onclick="window.dismissAlert('${alert.id}')">Dismiss</button>
@@ -752,6 +754,19 @@ export class ParentUI {
           </section>
 
           <section class="group">
+            <h3 class="group__title">${icon('shieldCheck', 15)} Device permissions</h3>
+            <div class="card card--flush">
+              <button class="row row--control" onclick="window.openPermissionSetup()">
+                <div class="row__body">
+                  <div class="row__title">Review permissions</div>
+                  <div class="row__sub">Location, notifications, SOS camera &amp; microphone, motion sensors and storage.</div>
+                </div>
+                ${icon('chevronRight', 16)}
+              </button>
+            </div>
+          </section>
+
+          <section class="group">
             <h3 class="group__title">${icon('history', 15)} Location history</h3>
             <div class="card card--flush">
               <div class="row row--control">
@@ -828,7 +843,7 @@ export class ParentUI {
             <span class="promise__icon">${icon('shieldCheck', 20)}</span>
             <div>
               <h3>Our privacy promise</h3>
-              <p>SafeHaven is built on trust. We never use covert listening, hidden camera recording, keystroke logging or secret tracking — children are always shown when their location is shared.</p>
+              <p>SafeHaven is built on trust. The camera and microphone are used only while an SOS is active, and the child sees when they are recording. No covert listening, keystroke logging or secret tracking — children are always shown when their location is shared.</p>
               <ul class="promise__list">
                 <li>${icon('check', 14)} 256-bit encryption</li>
                 <li>${icon('check', 14)} Explicit consent</li>
