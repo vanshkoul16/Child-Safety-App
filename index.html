@@ -28,6 +28,14 @@
   <script src="vendor/leaflet/leaflet.js"></script>
 
   <link rel="stylesheet" href="css/app.css" />
+
+  <!-- Supabase project config (injected at build/serve time; no secrets here) -->
+  <script>
+    window.__SAFEHAVEN_CONFIG__ = {
+      supabaseUrl:  '__SUPABASE_URL__',
+      supabaseAnon: '__SUPABASE_ANON_KEY__'
+    };
+  </script>
 </head>
 <body data-mode="parent">
   <div id="app-root">

@@ -2,6 +2,21 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// Load .env if present (no dotenv dependency needed)
+try {
+  const envFile = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+  envFile.split('\n').forEach(line => {
+    const [key, ...vals] = line.split('=');
+    const k = (key || '').trim();
+    if (k && !k.startsWith('#') && !(k in process.env)) {
+      process.env[k] = vals.join('=').trim();
+    }
+  });
+} catch { /* .env not present — use real env vars */ }
+
+const SUPABASE_URL      = process.env.SUPABASE_URL      || '__SUPABASE_URL__';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '__SUPABASE_ANON_KEY__';
+
 const PORT = process.env.PORT || 3000;
 const ROOT_DIR = path.resolve(__dirname);
 
@@ -199,13 +214,25 @@ const server = http.createServer(async (req, res) => {
       'Access-Control-Allow-Origin': '*'
     };
 
-
     if (cleanUrl === '/sw.js') {
       headers['Service-Worker-Allowed'] = '/';
     }
 
-    res.writeHead(200, headers);
-    fs.createReadStream(filePath).pipe(res);
+    // For index.html: inject real Supabase config into the placeholder script
+    if (ext === '.html') {
+      fs.readFile(filePath, 'utf8', (readErr, html) => {
+        if (readErr) { res.writeHead(500); res.end('Error reading file'); return; }
+        const injected = html
+          .replace('__SUPABASE_URL__',      SUPABASE_URL)
+          .replace('__SUPABASE_ANON_KEY__', SUPABASE_ANON_KEY);
+        headers['Content-Length'] = Buffer.byteLength(injected, 'utf8');
+        res.writeHead(200, headers);
+        res.end(injected);
+      });
+    } else {
+      res.writeHead(200, headers);
+      fs.createReadStream(filePath).pipe(res);
+    }
   });
 });
 

@@ -10,6 +10,11 @@ import { soundFx } from './audioNotifier.js';
 import { safetyEngine } from './safetyEngine.js';
 import { icon, zoneIcon, clean } from './icons.js';
 import { needsPermissionSetup, openPermissionSetup, startFallDetection, sosCapture } from './permissions.js';
+import { authUI } from './authUI.js';
+import { locationTracker } from './locationTracker.js';
+import { geofenceSync, GeofenceSync } from './geofenceSync.js';
+import { sosHandler } from './sosHandler.js';
+import { getMyProfile, getLinkedChildren } from './auth.js';
 
 const TOAST_ICONS = { info: 'info', critical: 'siren', warning: 'alert', safe: 'checkCircle' };
 
@@ -295,10 +300,176 @@ window.syncToBackend = async function(endpoint, payload) {
 };
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initApp);
+  document.addEventListener('DOMContentLoaded', bootWithAuth);
 } else {
-  initApp();
+  bootWithAuth();
 }
+
+/* =========================================================
+   Auth-gated bootstrap
+   1. Mount auth UI (shows login screen or demo notice)
+   2. On success → initApp() with real or demo data
+   3. Wire up real-data modules
+   ========================================================= */
+async function bootWithAuth() {
+  await authUI.mount(async (profile, isDemoMode) => {
+    // Update the auth chip in the topbar
+    const authBtn = document.getElementById('gmail-auth-btn');
+    if (authBtn) {
+      if (isDemoMode) {
+        document.getElementById('header-gmail-email').textContent = 'Demo Mode';
+        document.getElementById('header-gmail-initial').textContent = 'D';
+      }
+    }
+
+    // Always init the core app
+    initApp();
+
+    if (isDemoMode) {
+      // Show a persistent demo badge
+      _showDemoBadge();
+      // Start synthetic location on child view
+      locationTracker.startDemoMode({
+        onFix: (fix) => {
+          store.updateUserLiveLocation({ lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy });
+          if (mapCtrl.map) mapCtrl.renderLiveUserMarker();
+        },
+        onStatus: (s) => _updateTrackingIndicator(s)
+      });
+      return;
+    }
+
+    if (!profile) return;
+
+    if (profile.role === 'parent') {
+      await _initParentRealData(profile);
+    } else {
+      await _initChildRealData(profile);
+    }
+  });
+}
+
+function _showDemoBadge() {
+  const badge = document.createElement('div');
+  badge.className = 'demo-badge';
+  badge.textContent = 'DEMO';
+  badge.title = 'Running in demo mode. Register an account for real tracking.';
+  document.body.appendChild(badge);
+}
+
+function _updateTrackingIndicator(status) {
+  const el = document.getElementById('tracking-indicator');
+  if (!el) return;
+  el.dataset.status = status; // 'live' | 'demo' | 'denied' | 'stale'
+  const labels = { live: '🟢 Live', demo: '🔵 Demo', denied: '🔴 No GPS', stale: '🟡 Stale' };
+  el.textContent = labels[status] || status;
+}
+
+async function _initParentRealData(profile) {
+  // Load linked children from Supabase
+  const children = await getLinkedChildren();
+
+  if (children.length === 0) {
+    showToast('No children linked', 'Generate an invite code from Settings to add a child.', 'info');
+    return;
+  }
+
+  const childIds = children.map(c => c.id);
+
+  // Poll each child's latest location
+  for (const child of children) {
+    locationTracker.startParentPolling(child.id, {
+      onFix: (fix) => {
+        // Update child in local store for map rendering
+        const storeChild = store.getChild(child.id);
+        if (storeChild) {
+          store.updateChild(child.id, {
+            lat: fix.lat, lng: fix.lng,
+            lastUpdated: new Date(fix.recorded_at).getTime(),
+            isOnline: !locationTracker.constructor.isStale(fix.recorded_at)
+          });
+          if (mapCtrl.map) mapCtrl.renderChildMarker(child.id);
+        }
+      },
+      onStatus: (s) => _updateTrackingIndicator(s)
+    });
+  }
+
+  // Poll SOS alerts
+  sosHandler.startParentPolling(childIds, (alert) => {
+    if (alert) {
+      store.update({ activeSosAlert: {
+        id:        alert.id,
+        childId:   alert.child_id,
+        timestamp: new Date(alert.created_at).getTime(),
+        raisedBy:  alert.raise_role,
+        lat:       alert.lat,
+        lng:       alert.lng,
+        evidence:  'From Supabase alert'
+      }});
+    } else {
+      store.update({ activeSosAlert: null });
+    }
+  });
+
+  // Wire invite code button in Settings
+  window.showInviteCodeModal = () => authUI.showInviteCodeGenerator();
+}
+
+async function _initChildRealData(profile) {
+  // Get family and safe zones
+  const familyId = profile.supabaseUser?.user_metadata?.family_id;
+  const safeZones = familyId ? await GeofenceSync.fetchSafeZones(familyId) : [];
+
+  // Start real location tracking
+  locationTracker.startChildTracking({
+    onFix: async (fix) => {
+      store.updateUserLiveLocation({ lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy });
+      if (mapCtrl.map) mapCtrl.renderLiveUserMarker();
+
+      // Evaluate geofences
+      if (safeZones.length && profile.supabaseUser) {
+        const events = await geofenceSync.evaluateFix(
+          profile.supabaseUser.id, fix, safeZones
+        );
+        events.forEach(({ zone, eventType }) => {
+          const msg = eventType === 'enter'
+            ? `You entered ${zone.name}`
+            : `You left ${zone.name}`;
+          showToast('Zone update', msg, eventType === 'enter' ? 'safe' : 'warning');
+        });
+      }
+    },
+    onError: (err) => showToast('Location error', err.message, 'warning'),
+    onStatus: (s) => _updateTrackingIndicator(s)
+  });
+
+  // Wire SOS button on child view to real handler
+  window.childRaiseSOS = async () => {
+    const fix = locationTracker._latestFix;
+    const { alert, error } = await sosHandler.confirmAndRaise(fix, profile.supabaseUser.id);
+    if (error) {
+      showToast('SOS failed', error.message, 'warning');
+    } else if (alert) {
+      showToast('SOS sent', 'Your parents have been alerted.', 'critical');
+      soundFx.playEmergencySOS();
+    }
+  };
+}
+
+// Expose resolve SOS for parent dashboard
+window.resolveEmergencySOS = async function() {
+  const sos = store.get().activeSosAlert;
+  if (!sos) return;
+  const { error } = await sosHandler.resolve(sos.id);
+  if (error) {
+    showToast('Error', 'Could not resolve SOS: ' + error.message, 'warning');
+  } else {
+    store.update({ activeSosAlert: null });
+    showToast('SOS resolved', 'Alert marked as handled.', 'safe');
+  }
+};
+
 
 /* Fullscreen Emergency SOS Broadcast Overlay */
 function renderEmergencyBroadcast(state) {
