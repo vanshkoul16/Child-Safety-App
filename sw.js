@@ -3,7 +3,7 @@
    Offline Emergency Resiliency, Telemetry & Asset Caching
    ========================================================= */
 
-const CACHE_NAME = 'safehaven-cache-v20';
+const CACHE_NAME = 'safehaven-cache-v21';
 
 const CORE_ASSETS = [
   './',
@@ -19,8 +19,18 @@ const CORE_ASSETS = [
   './js/audioNotifier.js',
   './js/icons.js',
   './js/permissions.js',
+  './js/main.js',
+  './js/live/api.js',
+  './js/live/authView.js',
+  './js/live/childApp.js',
+  './js/live/liveApp.js',
+  './js/live/liveMap.js',
+  './js/live/parentApp.js',
+  './js/live/push.js',
+  './js/live/tracker.js',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js',
+  './vendor/supabase/supabase.js',
   './assets/icons/icon.svg',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
@@ -66,6 +76,9 @@ self.addEventListener('fetch', (event) => {
   // Only handle GET requests
   if (req.method !== 'GET') return;
 
+  // Never cache API responses or the runtime config
+  if (url.origin === self.location.origin && (url.pathname.startsWith('/api/') || url.pathname === '/app-config.js')) return;
+
   // Local assets: Network-First so updates land immediately; cache keeps the app working offline
   if (url.origin === self.location.origin) {
     event.respondWith(
@@ -95,4 +108,52 @@ self.addEventListener('fetch', (event) => {
       })
     );
   }
+});
+
+// 4. Web Push: SOS alerts for guardians (live mode)
+// The delivery receipt is posted only after the notification is actually shown on this device.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }
+  if (data.type !== 'sos') return;
+
+  event.waitUntil((async () => {
+    await self.registration.showNotification(data.title || 'SafeHaven SOS', {
+      body: data.body || 'Open SafeHaven now.',
+      tag: `sos-${data.sosId}`,
+      renotify: true,
+      requireInteraction: true,
+      icon: './assets/icons/icon-192.png',
+      badge: './assets/icons/icon-192.png',
+      vibrate: [300, 120, 300, 120, 600],
+      data: { url: data.url || '/' }
+    });
+    if (data.notificationId && data.receiptToken) {
+      try {
+        await fetch('/api/live/push-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notificationId: data.notificationId, receiptToken: data.receiptToken })
+        });
+      } catch (e) {
+        // Offline: the guardian's dashboard still shows the SOS; delivery just stays unconfirmed
+      }
+    }
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    windows.forEach((w) => w.postMessage({ type: 'sos-push', sosId: data.sosId }));
+  })());
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const existing = windows.find((w) => new URL(w.url).origin === self.location.origin);
+    if (existing) {
+      await existing.focus();
+      return existing.navigate(target);
+    }
+    return self.clients.openWindow(target);
+  })());
 });

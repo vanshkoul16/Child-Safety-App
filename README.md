@@ -4,6 +4,8 @@ SafeHaven is a child-safety Progressive Web App (PWA) with two experiences: a **
 
 The demo is set in Jammu, J&K, with three children (Anneliese, Anaya and Kabir) and two guardians (Vansh and Isheta Koul).
 
+> **Live mode vs demo mode.** The app now opens in **live mode**: real Supabase accounts for guardians and children, invite-code linking, real device location, server-side geofencing, and SOS with Web Push, all protected by row-level security. The feature tour below describes the original prototype, which is still available as a clearly labelled **demo mode** with synthetic data. Setup, deployment, security model and the full feature checklist are in **[docs/LIVE_MODE.md](docs/LIVE_MODE.md)**.
+
 ---
 
 ## 📱 Guardian app
@@ -83,6 +85,8 @@ npm start
 Then open **http://localhost:3000**. On Windows you can also double-click **`START_SAFEHAVEN.bat`**.
 
 `npm start` runs `local-server.js`, which serves the app and an in-memory version of the `/api` endpoints. To run against MongoDB locally, copy `.env.example` to `.env` and use `vercel dev` instead.
+
+For **live mode** (Supabase + Docker), follow [docs/LIVE_MODE.md → Local setup](docs/LIVE_MODE.md#local-setup). Without Supabase configured, the app opens a sign-in screen that says live mode isn't configured and offers the demo.
 
 ### Logic tests
 

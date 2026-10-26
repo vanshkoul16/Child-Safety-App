@@ -294,9 +294,22 @@ window.syncToBackend = async function(endpoint, payload) {
   }
 };
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initApp);
-} else {
+// Demo mode: the original prototype, driven entirely by synthetic sample data in localStorage
+export function startDemo() {
+  document.body.dataset.app = 'demo';
+  const viewport = document.getElementById('main-viewport');
+  if (viewport && !document.getElementById('demo-banner')) {
+    const banner = document.createElement('div');
+    banner.id = 'demo-banner';
+    banner.className = 'demo-banner';
+    banner.setAttribute('role', 'note');
+    banner.innerHTML = `
+      <span class="demo-banner__tag">${icon('info', 14)} Demo mode</span>
+      <span class="demo-banner__text">Sample family with synthetic locations, alerts and SOS — nothing here is real or sent anywhere.</span>
+      <button class="btn btn--soft btn--sm" onclick="window.leaveDemoMode()">Use live mode</button>
+    `;
+    viewport.prepend(banner);
+  }
   initApp();
 }
 

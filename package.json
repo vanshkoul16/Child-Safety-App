@@ -5,7 +5,15 @@
   "scripts": {
     "start": "node local-server.js",
     "dev": "node local-server.js",
-    "build": "echo SafeHaven static build ready"
+    "build": "echo SafeHaven static build ready",
+    "lint": "node scripts/lint.js",
+    "test": "node test_app_logic.js",
+    "test:integration": "node --test --test-concurrency=1 \"tests/*.test.js\"",
+    "vapid": "web-push generate-vapid-keys",
+    "db:start": "supabase start -x storage-api,imgproxy,logflare,vector,edge-runtime,supavisor,studio,postgres-meta",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:push": "supabase db push"
   },
   "engines": {
     "node": ">=18.x"
@@ -13,6 +21,11 @@
   "author": "vanshkoul16",
   "license": "MIT",
   "dependencies": {
-    "mongodb": "^6.10.0"
+    "@supabase/supabase-js": "^2.118.0",
+    "mongodb": "^6.10.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "supabase": "^2.121.0"
   }
 }

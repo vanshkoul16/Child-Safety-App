@@ -2,8 +2,28 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// Load .env (Node 20.12+) before anything reads process.env
+try { process.loadEnvFile(path.join(__dirname, '.env')); } catch (e) { /* no .env: live mode stays unconfigured */ }
+
+const liveApi = require('./server/liveApi');
+
 const PORT = process.env.PORT || 3000;
 const ROOT_DIR = path.resolve(__dirname);
+
+// Only these files and folders are ever served; everything else (.env, server/, supabase/, tests/, node_modules/) is not
+const PUBLIC_FILES = new Set(['/index.html', '/manifest.json', '/sw.js', '/LICENSE']);
+const PUBLIC_DIRS = ['/css/', '/js/', '/vendor/', '/assets/'];
+function isPublicPath(p) {
+  if (p.split('/').some((seg) => seg.startsWith('.'))) return false;
+  return PUBLIC_FILES.has(p) || PUBLIC_DIRS.some((d) => p.startsWith(d));
+}
+
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'geolocation=(self), camera=(self), microphone=(self)'
+};
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -50,6 +70,8 @@ function readJsonBody(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  if (await liveApi.handle(req, res)) return;
+
   // CORS Preflight Handler
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -164,17 +186,24 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Static File Server
-  let cleanUrl = decodeURIComponent(req.url.split('?')[0]);
+  let cleanUrl;
+  try {
+    cleanUrl = decodeURIComponent(req.url.split('?')[0]);
+  } catch (e) {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Bad request');
+    return;
+  }
   if (cleanUrl === '/' || cleanUrl === '') cleanUrl = '/index.html';
 
   // Resolve absolute file path securely
-  const safeRelative = cleanUrl.replace(/^(\.\.[\/\\])+/, '');
+  const safeRelative = path.posix.normalize(cleanUrl.replace(/\\/g, '/'));
   const filePath = path.resolve(ROOT_DIR, '.' + safeRelative);
 
-  // Security check: ensure path is within ROOT_DIR (case-insensitive for Windows)
-  if (!filePath.toLowerCase().startsWith(ROOT_DIR.toLowerCase())) {
-    res.writeHead(403, { 'Content-Type': 'text/plain' });
-    res.end('Forbidden: Access outside root');
+  // Security check: public allowlist, and the resolved path must stay inside ROOT_DIR (case-insensitive for Windows)
+  if (!isPublicPath(safeRelative) || !filePath.toLowerCase().startsWith(ROOT_DIR.toLowerCase() + path.sep)) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Not Found');
     return;
   }
 
@@ -192,11 +221,11 @@ const server = http.createServer(async (req, res) => {
     }
 
     const headers = {
+      ...SECURITY_HEADERS,
       'Content-Type': contentType,
       'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
       'Pragma': 'no-cache',
-      'Expires': '0',
-      'Access-Control-Allow-Origin': '*'
+      'Expires': '0'
     };
 
 
@@ -227,5 +256,8 @@ process.on('unhandledRejection', (reason) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`SafeHaven 24/7 server running on port ${PORT}`);
+  const s = liveApi.status;
+  console.log(`Live mode: Supabase ${s.supabaseReady ? 'configured' : 'NOT configured'} · server key ${s.serverReady ? 'set' : 'missing'} · web push ${s.pushReady ? 'on' : 'off'}`);
+  liveApi.startMaintenance();
 });
 
