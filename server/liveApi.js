@@ -59,6 +59,27 @@ function send(res, status, body) {
 }
 
 function readJson(req) {
+  // Vercel's Node runtime parses the body before the handler runs and consumes the stream,
+  // so use req.body when the platform provides it. Plain Node (local-server.js) has no req.body.
+  let preParsed;
+  try { preParsed = req.body; } catch (e) { return Promise.reject(Object.assign(new Error('invalid_json'), { status: 400 })); }
+  if (preParsed !== undefined) {
+    return new Promise((resolve, reject) => {
+      try {
+        let value = preParsed;
+        if (Buffer.isBuffer(value)) value = value.toString('utf8');
+        if (typeof value === 'string') {
+          if (value.length > MAX_BODY_BYTES) throw Object.assign(new Error('payload_too_large'), { status: 413 });
+          value = value ? JSON.parse(value) : {};
+        } else if (value && JSON.stringify(value).length > MAX_BODY_BYTES) {
+          throw Object.assign(new Error('payload_too_large'), { status: 413 });
+        }
+        resolve(value && typeof value === 'object' ? value : {});
+      } catch (e) {
+        reject(e.status ? e : Object.assign(new Error('invalid_json'), { status: 400 }));
+      }
+    });
+  }
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
@@ -83,7 +104,13 @@ function readJson(req) {
 }
 
 function clientIp(req) {
-  return req.socket.remoteAddress || 'unknown';
+  // On Vercel the socket peer is the platform proxy. Vercel sets x-forwarded-for itself (clients cannot
+  // spoof it there), so trust it only when running on Vercel.
+  if (env.VERCEL) {
+    const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (fwd) return fwd;
+  }
+  return (req.socket && req.socket.remoteAddress) || 'unknown';
 }
 
 // Only same-origin browser requests may call the authenticated endpoints
@@ -239,31 +266,43 @@ async function purge() {
   else if (data && (data.locations || data.invites)) console.log('[SafeHaven] retention purge:', data);
 }
 
+// Called by Vercel Cron (which sends "Authorization: Bearer $CRON_SECRET"). Not for browsers.
+async function purgeRoute(req, res) {
+  const secret = env.CRON_SECRET || '';
+  if (!secret) return send(res, 503, { error: 'cron_not_configured' });
+  const given = Buffer.from(String(req.headers.authorization || ''));
+  const want = Buffer.from(`Bearer ${secret}`);
+  if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) return send(res, 401, { error: 'unauthorized' });
+  if (!admin) return send(res, 503, { error: 'live_not_configured' });
+  const { data, error } = await admin.rpc('purge_expired_data');
+  if (error) throw error;
+  return send(res, 200, { ok: true, purged: data });
+}
+
 function startMaintenance() {
   if (!admin) return;
   purge();
   setInterval(purge, 60 * 60 * 1000).unref();
 }
 
-// Returns true when the request was handled here
-async function handle(req, res) {
-  const pathname = req.url.split('?')[0];
+// Route table shared by local-server.js (via handle) and the Vercel function wrappers (via dispatch)
+const ROUTES = {
+  'GET /app-config.js': (req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(appConfigScript());
+  },
+  'GET /api/live/status': (req, res) => send(res, 200, { supabase: supabaseReady, server: serverReady, push: pushReady }),
+  'POST /api/live/sos-notify': notifySos,
+  'POST /api/live/push-receipt': pushReceipt,
+  'GET /api/live/purge': purgeRoute
+};
+
+// Handles one named route. Returns true when the request was handled here.
+async function dispatch(pathname, req, res) {
   try {
-    if (pathname === '/app-config.js' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(appConfigScript());
-      return true;
-    }
-    if (pathname === '/api/live/status' && req.method === 'GET') {
-      send(res, 200, { supabase: supabaseReady, server: serverReady, push: pushReady });
-      return true;
-    }
-    if (pathname === '/api/live/sos-notify' && req.method === 'POST') {
-      await notifySos(req, res);
-      return true;
-    }
-    if (pathname === '/api/live/push-receipt' && req.method === 'POST') {
-      await pushReceipt(req, res);
+    const route = ROUTES[`${req.method} ${pathname}`];
+    if (route) {
+      await route(req, res);
       return true;
     }
     if (pathname.startsWith('/api/live/')) {
@@ -278,4 +317,9 @@ async function handle(req, res) {
   return false;
 }
 
-module.exports = { handle, startMaintenance, status: { supabaseReady, serverReady, pushReady } };
+// Returns true when the request was handled here
+function handle(req, res) {
+  return dispatch(req.url.split('?')[0], req, res);
+}
+
+module.exports = { handle, dispatch, startMaintenance, status: { supabaseReady, serverReady, pushReady } };

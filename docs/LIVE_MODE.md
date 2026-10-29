@@ -117,7 +117,7 @@ Live mode needs the Node server (`local-server.js`), because it serves `/app-con
 
 - **Render** (already configured via `render.yaml`): add the `SUPABASE_*` and `VAPID_*` variables in the Render dashboard, then deploy. Render provides HTTPS, which phones need for location and push.
 - **Any Node host** with HTTPS works the same way (`npm install && npm start`, set `PORT` if required).
-- **Vercel**: the existing Vercel/MongoDB setup (`api/*.js`, `vercel.json`) was intentionally left unchanged. It still serves the demo, but live mode will report "not configured" there because `/app-config.js` and `/api/live/*` aren't deployed as Vercel functions yet.
+- **Vercel**: supported. `vercel.json` builds a `public/` folder containing only the browser files (`scripts/build-vercel.js`), serves `/app-config.js` and `/api/live/*` as serverless functions (`api/app-config.js`, `api/live/*.js`, sharing `server/liveApi.js` with the Node server), and runs a daily Cron (`/api/live/purge`, protected by `CRON_SECRET`) in place of the hourly in-process purge. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` and `CRON_SECRET` in Vercel → Settings → Environment Variables, then redeploy. The in-memory API rate limiter is per function instance on Vercel, so it is best-effort there; database-level limits still apply.
 
 The static server only serves `index.html`, `manifest.json`, `sw.js`, `LICENSE` and the `css/`, `js/`, `vendor/` and `assets/` folders. Everything else (including `.env`) returns 404.
 

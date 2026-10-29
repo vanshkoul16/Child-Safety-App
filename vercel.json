@@ -2,8 +2,8 @@
   "version": 2,
   "framework": null,
   "installCommand": "npm install",
-  "buildCommand": null,
-  "outputDirectory": ".",
+  "buildCommand": "node scripts/build-vercel.js",
+  "outputDirectory": "public",
   "headers": [
     {
       "source": "/sw.js",
@@ -63,19 +63,40 @@
         {
           "key": "X-XSS-Protection",
           "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(self), camera=(self), microphone=(self)"
         }
       ]
     }
   ],
   "rewrites": [
     {
+      "source": "/app-config.js",
+      "destination": "/api/app-config"
+    },
+    {
       "source": "/((?!api/|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],
   "functions": {
-    "api/*.js": {
+    "api/**/*.js": {
       "maxDuration": 10
+    },
+    "api/live/sos-notify.js": {
+      "maxDuration": 20
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/live/purge",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

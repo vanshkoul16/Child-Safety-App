@@ -9,5 +9,19 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Supabase (live mode). URL + anon key are public; the service-role key is secret.
+      - key: SUPABASE_URL
+        value: https://gzjgabizyrcbmmtlqirq.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: sb_publishable_M5eFnDmcYrn8tqjuXcCKIA_PnZBIN6V
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Web Push for SOS alerts (generate with: npm run vapid)
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
     healthCheckPath: /
     autoDeploy: true

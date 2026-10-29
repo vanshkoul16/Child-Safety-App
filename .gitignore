@@ -24,3 +24,6 @@ Thumbs.db
 # Archives
 *.zip
 tests/fixtures/*.local.json
+
+# Vercel build output
+public/
