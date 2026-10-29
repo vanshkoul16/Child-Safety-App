@@ -88,9 +88,6 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 10
-    },
-    "api/live/sos-notify.js": {
-      "maxDuration": 20
     }
   },
   "crons": [
