@@ -4,7 +4,8 @@
    and a manual SOS with confirmation and cancel.
    ========================================================= */
 
-import { sb, call, serverPost, esc, ago, clock, friendlyError, avatarHtml } from './api.js';
+import { sb, call, serverPost, esc, ago, clock, friendlyError, avatarHtml, copyText, providerLabel, flashDone } from './api.js';
+import { playEnter } from '../motion.js';
 import { Tracker } from './tracker.js';
 import { icon } from '../icons.js';
 import { openModal, closeModal, showToast } from '../app.js';
@@ -14,7 +15,7 @@ export class ChildApp {
   constructor(root, profile, hooks) {
     this.root = root;
     this.me = profile;
-    this.hooks = hooks; // { setIndicator(state) }
+    this.hooks = hooks; // { setIndicator(state), user }
     this.s = {
       loading: true,
       error: '',
@@ -71,7 +72,7 @@ export class ChildApp {
 
       const parentIds = links.data.map((l) => l.parent_id);
       const guardians = parentIds.length
-        ? await client.from('profiles').select('id, display_name').in('id', parentIds)
+        ? await client.from('profiles').select('id, public_id, display_name').in('id', parentIds)
         : { data: [] };
       if (guardians.error) throw guardians.error;
 
@@ -133,6 +134,9 @@ export class ChildApp {
     const a = document.activeElement;
     if (!force && a && a.name === 'code' && this.root.contains(a)) return;
     this.root.innerHTML = this.html();
+    // Cascade the dashboard in once, when the first data replaces the placeholder
+    if (this.renderedLoading && !this.s.loading) playEnter(this.root);
+    this.renderedLoading = this.s.loading;
   }
 
   html() {
@@ -144,7 +148,13 @@ export class ChildApp {
     const zone = insideZone ? s.zones.find((z) => z.id === insideZone.zone_id) : null;
 
     if (s.loading) {
-      return `<div class="kid"><div class="live-loading">${icon('locate', 22)}<span>Loading your account…</span></div></div>`;
+      return `
+        <div class="kid sk-kid" role="status" aria-busy="true">
+          <span class="sr-only">Loading your account…</span>
+          <div class="sk-kid__head"><div class="sk sk--circle"></div><div class="sk-kid__lines"><div class="sk sk--line"></div><div class="sk sk--line"></div></div></div>
+          <div class="sk sk--status"></div>
+          <div class="sk sk--circle sk--sos"></div>
+        </div>`;
     }
 
     return `
@@ -190,14 +200,31 @@ export class ChildApp {
             <div class="card-head card-head--pad"><div><h3 class="card-title">Your guardians</h3><p class="card-sub">They receive your SOS alerts.</p></div></div>
             <ul class="rows">
               ${s.guardians.map((g) => `
-                <li class="row">${avatarHtml(g.display_name, 'sm')}<div class="row__body"><div class="row__title">${esc(g.display_name)}</div></div></li>
+                <li class="row">${avatarHtml(g.display_name, 'sm')}<div class="row__body"><div class="row__title">${esc(g.display_name)}</div>${g.public_id ? `<div class="row__sub">Guardian · <span class="mono">${esc(g.public_id)}</span></div>` : ''}</div></li>
               `).join('')}
             </ul>
             <button class="row row--add" data-action="show-link">${icon('userPlus', 16)}<span class="row__title">Link another guardian</span></button>
           </section>
           ${this.s.showLink ? this.linkCard() : ''}
         ` : ''}
+
+        ${this.accountCard()}
       </div>
+    `;
+  }
+
+  accountCard() {
+    const user = this.hooks.user;
+    return `
+      <section class="card card--flush">
+        <div class="card-head card-head--pad"><div><h3 class="card-title">${icon('idCard', 16)} My account</h3><p class="card-sub">${esc(user && user.email ? user.email : '')}${user ? ` · signs in with ${esc(providerLabel(user))}` : ''}</p></div></div>
+        <div class="row">
+          <div class="row__body"><div class="row__title">Child ID</div><div class="row__sub">Your public account ID. It can't be used to link or see your location — only an invite code from your guardian can.</div></div>
+          <span class="mono live-public-id live-public-id--lg">${esc(this.me.public_id || '—')}</span>
+          ${this.me.public_id ? `<button class="btn btn--soft btn--sm" data-action="copy-id" aria-label="Copy Child ID">${icon('copy', 14)} Copy</button>` : ''}
+        </div>
+        <button class="row row--control" data-action="signout"><div class="row__body"><div class="row__title">Sign out</div><div class="row__sub">Location sharing stops on this device.</div></div>${icon('logOut', 16)}</button>
+      </section>
     `;
   }
 
@@ -303,6 +330,12 @@ export class ChildApp {
     else if (a === 'zones') this.showZones();
     else if (a === 'reload') this.load();
     else if (a === 'show-link') { this.s.showLink = !this.s.showLink; this.render(); }
+    else if (a === 'copy-id') {
+      copyText(this.me.public_id).then((ok) => {
+        if (ok) flashDone(el, `${icon('check', 14)} Copied`);
+        else showToast('Couldn\'t copy', 'Select the ID and copy it manually.', 'warning');
+      });
+    } else if (a === 'signout') sb().auth.signOut();
   }
 
   async onSubmit(e) {

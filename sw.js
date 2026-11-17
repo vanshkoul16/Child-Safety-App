@@ -3,7 +3,7 @@
    Offline Emergency Resiliency, Telemetry & Asset Caching
    ========================================================= */
 
-const CACHE_NAME = 'safehaven-cache-v21';
+const CACHE_NAME = 'safehaven-cache-v24';
 
 const CORE_ASSETS = [
   './',
@@ -20,11 +20,13 @@ const CORE_ASSETS = [
   './js/icons.js',
   './js/permissions.js',
   './js/main.js',
+  './js/motion.js',
   './js/live/api.js',
   './js/live/authView.js',
   './js/live/childApp.js',
   './js/live/liveApp.js',
   './js/live/liveMap.js',
+  './js/live/onboardingView.js',
   './js/live/parentApp.js',
   './js/live/push.js',
   './js/live/tracker.js',
@@ -78,6 +80,9 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache API responses or the runtime config
   if (url.origin === self.location.origin && (url.pathname.startsWith('/api/') || url.pathname === '/app-config.js')) return;
+
+  // Never store sign-in returns (one-time ?code= / token_hash from Google or email links)
+  if (url.origin === self.location.origin && (url.searchParams.has('code') || url.searchParams.has('token_hash') || url.searchParams.has('auth'))) return;
 
   // Local assets: Network-First so updates land immediately; cache keeps the app working offline
   if (url.origin === self.location.origin) {

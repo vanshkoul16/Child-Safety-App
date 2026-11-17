@@ -9,6 +9,7 @@
     "lint": "node scripts/lint.js",
     "test": "node test_app_logic.js",
     "test:integration": "node --test --test-concurrency=1 \"tests/*.test.js\"",
+    "test:db": "supabase test db",
     "vapid": "web-push generate-vapid-keys",
     "db:start": "supabase start -x storage-api,imgproxy,logflare,vector,edge-runtime,supavisor,studio,postgres-meta",
     "db:stop": "supabase stop",

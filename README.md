@@ -4,7 +4,7 @@ SafeHaven is a child-safety Progressive Web App (PWA) with two experiences: a **
 
 The demo is set in Jammu, J&K, with three children (Anneliese, Anaya and Kabir) and two guardians (Vansh and Isheta Koul).
 
-> **Live mode vs demo mode.** The app now opens in **live mode**: real Supabase accounts for guardians and children, invite-code linking, real device location, server-side geofencing, and SOS with Web Push, all protected by row-level security. The feature tour below describes the original prototype, which is still available as a clearly labelled **demo mode** with synthetic data. Setup, deployment, security model and the full feature checklist are in **[docs/LIVE_MODE.md](docs/LIVE_MODE.md)**.
+> **Live mode vs demo mode.** The app now opens in **live mode**: real Supabase accounts for guardians and children, invite-code linking, real device location, server-side geofencing, and SOS with Web Push, all protected by row-level security. The feature tour below describes the original prototype, which is still available as a clearly labelled **demo mode** with synthetic data. Setup, deployment, security model and the full feature checklist are in **[docs/LIVE_MODE.md](docs/LIVE_MODE.md)**. Guardians and children sign in with **Google** or **email and password**; the Google Cloud and Supabase steps are in **[docs/AUTH_SETUP.md](docs/AUTH_SETUP.md)**.
 
 ---
 

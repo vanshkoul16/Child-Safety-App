@@ -6,6 +6,7 @@ import { store } from './state.js';
 import { mapCtrl } from './mapController.js';
 import { icon, zoneIcon, clean, short, timeAgo, statusOf, batteryMeter, signalBars } from './icons.js';
 import { sosCapture } from './permissions.js';
+import { playEnter } from './motion.js';
 
 const ALERT_FILTERS = [
   { key: 'all', label: 'All' },
@@ -147,6 +148,8 @@ export class ParentUI {
     });
 
     if (activeTab !== this.lastTab) {
+      // Cascade the newly opened tab in (only on a tab change, never on routine re-renders)
+      if (activeTab !== 'map') playEnter(document.getElementById(`tab-${activeTab}`));
       const main = document.getElementById('parent-content-area');
       if (main && this.lastTab !== null) main.scrollTop = 0;
       if (this.lastTab !== null && activeTab !== 'map') window.scrollTo({ top: 0 });

@@ -1,9 +1,15 @@
 /* =========================================================
-   SafeHaven Live - Sign in / create account screen
+   SafeHaven Live - Sign in / create account screens
+   Google (Supabase OAuth, PKCE) and email + password, plus
+   confirmation resend, forgot password and set-new-password.
    ========================================================= */
 
-import { sb, esc, friendlyError, isLiveConfigured } from './api.js';
+import {
+  sb, esc, friendlyError, isLiveConfigured, authRedirect, authSettings,
+  savePendingRole, clearPendingRole, passwordProblem, EMAIL_RE
+} from './api.js';
 import { icon } from '../icons.js';
+import { prefersReducedMotion } from '../motion.js';
 
 const SCENE_SECONDS = 9;
 
@@ -102,68 +108,157 @@ function startScene(root) {
   requestAnimationFrame(tick);
 }
 
-export function renderAuth(root, { mode = 'signin', notice = '' } = {}) {
+/* Google's own "G" mark, as its sign-in branding guidelines require */
+const GOOGLE_G = `<svg class="google-g" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
+
+export const ROLE_COPY = {
+  parent: {
+    title: 'Parent / Guardian',
+    ic: 'users',
+    points: ['Parent dashboard with live locations', 'Link children with a one-time code', 'Safe zones and arrival / leaving alerts', 'SOS alerts from your children']
+  },
+  child: {
+    title: 'Child',
+    ic: 'smartphone',
+    points: ['Child dashboard with an SOS button', 'Join a guardian\'s family with their code', 'Share location only after you allow it', 'Always see when sharing is on']
+  }
+};
+
+/* Account-type picker shared by sign-up and Google onboarding */
+export function rolePicker(selected, name = 'role') {
+  return `
+    <fieldset class="live-roles">
+      <legend class="field__label">Who is this account for?</legend>
+      ${['parent', 'child'].map((r) => `
+        <label class="live-role">
+          <input type="radio" name="${name}" value="${r}" ${selected === r ? 'checked' : ''} required />
+          <span class="live-role__body">${icon(ROLE_COPY[r].ic, 18)}<strong>${ROLE_COPY[r].title}</strong>
+            <small>${ROLE_COPY[r].points.join(' · ')}</small>
+          </span>
+        </label>
+      `).join('')}
+    </fieldset>
+  `;
+}
+
+const RESEND_COOLDOWN_S = 60;
+let resendAvailableAt = 0;
+let firstRender = true; // the panels rise in once; switching tabs only fades the form
+
+function note(tone, ic, html, role = 'status') {
+  return `<div class="live-note tone-${tone}" role="${role}">${icon(ic, 16)}<span>${html}</span></div>`;
+}
+
+function passwordField(name, label, autocomplete, hint = '') {
+  return `
+    <label class="field">
+      <span class="field__label">${label} ${hint ? `<span class="field__hint">${hint}</span>` : ''}</span>
+      <span class="input-wrap">${icon('lock', 16)}<input class="input" name="${name}" type="password" required minlength="8" maxlength="72" autocomplete="${autocomplete}" /></span>
+    </label>
+  `;
+}
+
+function emailField(value = '') {
+  return `
+    <label class="field">
+      <span class="field__label">Email</span>
+      <span class="input-wrap">${icon('mail', 16)}<input class="input" name="email" type="email" required autocomplete="email" placeholder="name@example.com" value="${esc(value)}" /></span>
+    </label>
+  `;
+}
+
+/* opts: { mode: 'signin' | 'signup' | 'forgot' | 'check-email', notice, error, email, role, unconfirmed } */
+export function renderAuth(root, opts = {}) {
+  const { mode = 'signin', notice = '', error = '', email = '', role = 'parent', unconfirmed = false } = opts;
   const configured = isLiveConfigured();
 
+  const titles = {
+    signin: ['Sign in to SafeHaven', 'Live locations, safe zones and SOS alerts for your family.'],
+    signup: ['Create your account', 'Guardians and children each have their own account. You link them afterwards with a one-time code.'],
+    forgot: ['Reset your password', 'Enter the email you signed up with. We\'ll send a secure link to choose a new password.'],
+    'check-email': ['Check your inbox', `We sent a confirmation link to <strong>${esc(email)}</strong>. Open it on this device to finish creating your account.`]
+  };
+  const [title, lede] = titles[mode] || titles.signin;
+
+  let body = '';
+  if (mode === 'signin' || mode === 'signup') {
+    body = `
+      <div class="seg live-auth__tabs" role="tablist" aria-label="Account">
+        <button class="seg__btn ${mode === 'signin' ? 'active' : ''}" role="tab" aria-selected="${mode === 'signin'}" data-auth-tab="signin">Sign in</button>
+        <button class="seg__btn ${mode === 'signup' ? 'active' : ''}" role="tab" aria-selected="${mode === 'signup'}" data-auth-tab="signup">Create account</button>
+      </div>
+
+      <form class="form" id="live-auth-form" novalidate>
+        ${mode === 'signup' ? rolePicker(role) : ''}
+
+        <button type="button" class="btn btn--google btn--block btn--lg" data-auth-google ${configured ? '' : 'disabled'}>
+          ${GOOGLE_G}<span>${mode === 'signup' ? 'Sign up with Google' : 'Continue with Google'}</span>
+        </button>
+        <p class="fine live-auth__google-note" data-google-note>${mode === 'signup'
+          ? 'Uses the account type selected above. You confirm it once more after choosing your Google account.'
+          : 'Use your Gmail or Google Workspace account. SafeHaven never sees your Google password.'}</p>
+
+        <div class="divider"><span>or with email</span></div>
+
+        ${mode === 'signup' ? `
+          <label class="field">
+            <span class="field__label">Display name</span>
+            <input class="input" name="display_name" type="text" maxlength="60" required autocomplete="nickname" placeholder="e.g. Asha" />
+          </label>
+        ` : ''}
+        ${emailField(email)}
+        ${passwordField('password', 'Password', mode === 'signup' ? 'new-password' : 'current-password', mode === 'signup' ? '8+ characters, letters and numbers' : '')}
+        ${mode === 'signup' ? passwordField('password2', 'Confirm password', 'new-password') : ''}
+        <p class="form-error" id="live-auth-error" role="alert" ${error ? '' : 'hidden'}>${esc(error)}</p>
+        ${unconfirmed ? `<button type="button" class="btn btn--soft btn--block" data-auth-resend>${icon('mail', 16)} Resend confirmation email</button>` : ''}
+        <button type="submit" class="btn btn--primary btn--block btn--lg" ${configured ? '' : 'disabled'}>${mode === 'signup' ? 'Create account with email' : 'Sign in'}</button>
+        ${mode === 'signin' ? '<button type="button" class="link-btn live-auth__forgot" data-auth-mode="forgot">Forgot password?</button>' : ''}
+      </form>
+    `;
+  } else if (mode === 'forgot') {
+    body = `
+      <form class="form" id="live-auth-form" novalidate>
+        ${emailField(email)}
+        <p class="form-error" id="live-auth-error" role="alert" ${error ? '' : 'hidden'}>${esc(error)}</p>
+        <button type="submit" class="btn btn--primary btn--block btn--lg" ${configured ? '' : 'disabled'}>Send reset link</button>
+        <button type="button" class="btn btn--ghost btn--block" data-auth-mode="signin">Back to sign in</button>
+      </form>
+    `;
+  } else if (mode === 'check-email') {
+    body = `
+      <div class="form">
+        <ol class="steps live-steps">
+          <li><strong>Open the email from SafeHaven</strong><span>Check spam or promotions if it isn't in your inbox.</span></li>
+          <li><strong>Tap "Confirm your email"</strong><span>You'll come back here signed in, straight to your dashboard.</span></li>
+        </ol>
+        <p class="form-error" id="live-auth-error" role="alert" ${error ? '' : 'hidden'}>${esc(error)}</p>
+        <button type="button" class="btn btn--soft btn--block" data-auth-resend>${icon('mail', 16)} Resend confirmation email</button>
+        <button type="button" class="btn btn--ghost btn--block" data-auth-mode="signin">Back to sign in</button>
+      </div>
+    `;
+  }
+
+  const entering = firstRender && !prefersReducedMotion();
+  firstRender = false;
   root.innerHTML = `
-    <div class="live-auth">
+    <div class="live-auth ${entering ? 'is-entering' : ''}">
       ${authShowcase()}
       <div class="live-auth__card card">
         <div class="signin-hero">
-          <span class="signin-hero__mark">${icon('shieldCheck', 24)}</span>
-          <h1 class="display live-auth__title">${mode === 'signup' ? 'Create your account' : 'Sign in to SafeHaven'}</h1>
-          <p class="modal__lede">${mode === 'signup'
-            ? 'Guardians and children each have their own account. You link them afterwards with a one-time code.'
-            : 'Live locations, safe zones and SOS alerts for your family.'}</p>
+          <span class="signin-hero__mark">${icon(mode === 'check-email' ? 'mail' : mode === 'forgot' ? 'key' : 'shieldCheck', 24)}</span>
+          <h1 class="display live-auth__title">${title}</h1>
+          <p class="modal__lede">${lede}</p>
         </div>
 
-        ${!configured ? `
-          <div class="live-note tone-attention" role="alert">
-            ${icon('alert', 16)}
-            <span>Live mode isn't configured on this server yet (missing Supabase URL or key). See <span class="mono">docs/LIVE_MODE.md</span>. You can still explore the demo.</span>
-          </div>
-        ` : ''}
+        ${!configured ? note('attention', 'alert', 'Live mode isn\'t configured on this server yet (missing Supabase URL or key). See <span class="mono">docs/LIVE_MODE.md</span>. You can still explore the demo.', 'alert') : ''}
+        ${notice ? note('safe', 'checkCircle', esc(notice)) : ''}
+        <div data-auth-config></div>
 
-        ${notice ? `<div class="live-note tone-safe" role="status">${icon('checkCircle', 16)}<span>${esc(notice)}</span></div>` : ''}
-
-        <div class="seg live-auth__tabs" role="tablist" aria-label="Account">
-          <button class="seg__btn ${mode === 'signin' ? 'active' : ''}" role="tab" aria-selected="${mode === 'signin'}" data-auth-tab="signin">Sign in</button>
-          <button class="seg__btn ${mode === 'signup' ? 'active' : ''}" role="tab" aria-selected="${mode === 'signup'}" data-auth-tab="signup">Create account</button>
-        </div>
-
-        <form class="form" id="live-auth-form" novalidate>
-          ${mode === 'signup' ? `
-            <fieldset class="live-roles">
-              <legend class="field__label">Who is this account for?</legend>
-              <label class="live-role">
-                <input type="radio" name="role" value="parent" checked />
-                <span class="live-role__body">${icon('users', 18)}<strong>Parent or guardian</strong><small>See your children's location and receive SOS alerts</small></span>
-              </label>
-              <label class="live-role">
-                <input type="radio" name="role" value="child" />
-                <span class="live-role__body">${icon('smartphone', 18)}<strong>Child's phone</strong><small>Share location with linked guardians and send SOS</small></span>
-              </label>
-            </fieldset>
-            <label class="field">
-              <span class="field__label">Display name</span>
-              <input class="input" name="display_name" type="text" maxlength="60" required autocomplete="nickname" placeholder="e.g. Asha" />
-            </label>
-          ` : ''}
-          <label class="field">
-            <span class="field__label">Email</span>
-            <span class="input-wrap">${icon('mail', 16)}<input class="input" name="email" type="email" required autocomplete="email" placeholder="name@example.com" /></span>
-          </label>
-          <label class="field">
-            <span class="field__label">Password ${mode === 'signup' ? '<span class="field__hint">at least 8 characters</span>' : ''}</span>
-            <span class="input-wrap">${icon('lock', 16)}<input class="input" name="password" type="password" required minlength="8" autocomplete="${mode === 'signup' ? 'new-password' : 'current-password'}" /></span>
-          </label>
-          <p class="form-error" id="live-auth-error" role="alert" hidden></p>
-          <button type="submit" class="btn btn--primary btn--block btn--lg" ${configured ? '' : 'disabled'}>${mode === 'signup' ? 'Create account' : 'Sign in'}</button>
-        </form>
+        ${body}
 
         <div class="divider"><span>or</span></div>
         <button class="btn btn--soft btn--block" data-auth-demo>${icon('play', 16)} Explore the demo with sample data</button>
-        <p class="fine live-auth__fine">Demo mode uses a made-up family and synthetic locations. Nothing in it is real.</p>
+        <p class="fine live-auth__fine">Demo mode uses a made-up family and synthetic locations. Nothing in it is real, and it never creates real accounts.</p>
       </div>
     </div>
   `;
@@ -171,49 +266,200 @@ export function renderAuth(root, { mode = 'signin', notice = '' } = {}) {
   startScene(root);
 
   root.querySelectorAll('[data-auth-tab]').forEach((b) => {
-    b.addEventListener('click', () => renderAuth(root, { mode: b.dataset.authTab }));
+    b.addEventListener('click', () => renderAuth(root, { mode: b.dataset.authTab, email: currentEmail() }));
+  });
+  root.querySelectorAll('[data-auth-mode]').forEach((b) => {
+    b.addEventListener('click', () => renderAuth(root, { mode: b.dataset.authMode, email: currentEmail() }));
   });
   root.querySelector('[data-auth-demo]').addEventListener('click', () => window.enterDemoMode());
 
   const form = root.querySelector('#live-auth-form');
   const errEl = root.querySelector('#live-auth-error');
+  const showError = (msg) => {
+    if (!errEl) return;
+    errEl.textContent = msg;
+    errEl.hidden = !msg;
+  };
+  function currentEmail() {
+    const el = root.querySelector('input[name="email"]');
+    return el ? el.value.trim() : email;
+  }
+  function selectedRole() {
+    const el = root.querySelector('input[name="role"]:checked');
+    return el ? el.value : null;
+  }
+
+  // Tell the user up front when the Supabase project has Google turned off
+  if (configured && (mode === 'signin' || mode === 'signup')) {
+    authSettings().then((s) => {
+      const googleBtn = root.querySelector('[data-auth-google]');
+      if (!googleBtn || !googleBtn.isConnected) return;
+      if (s.known && !s.google) {
+        googleBtn.disabled = true;
+        const n = root.querySelector('[data-google-note]');
+        if (n) n.innerHTML = `${icon('info', 12)}<span>Google sign-in isn't enabled on this server yet. An administrator must turn it on in Supabase (see <span class="mono">docs/AUTH_SETUP.md</span>). Email sign-in works now.</span>`;
+      }
+    });
+  }
+
+  const googleBtn = root.querySelector('[data-auth-google]');
+  if (googleBtn) {
+    googleBtn.addEventListener('click', async () => {
+      showError('');
+      if (mode === 'signup') {
+        const r = selectedRole();
+        if (!r) return showError('Choose who the account is for first.');
+        savePendingRole(r);
+      } else {
+        clearPendingRole(); // existing users go straight in; new users choose on the next screen
+      }
+      googleBtn.disabled = true;
+      googleBtn.classList.add('is-busy');
+      try {
+        const s = await authSettings();
+        if (s.known && !s.google) throw new Error('Unsupported provider');
+        const { error: err } = await sb().auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: authRedirect('callback'), queryParams: { prompt: 'select_account' } }
+        });
+        if (err) throw err;
+        // The browser now leaves for Google's account chooser
+      } catch (err) {
+        clearPendingRole();
+        showError(friendlyError(err));
+        googleBtn.disabled = false;
+        googleBtn.classList.remove('is-busy');
+      }
+    });
+  }
+
+  root.querySelectorAll('[data-auth-resend]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const addr = currentEmail();
+      if (!EMAIL_RE.test(addr)) return showError('Enter your email address above, then resend.');
+      const wait = Math.ceil((resendAvailableAt - Date.now()) / 1000);
+      if (wait > 0) return showError(`Please wait ${wait} s before sending another email.`);
+      btn.disabled = true;
+      try {
+        const { error: err } = await sb().auth.resend({ type: 'signup', email: addr, options: { emailRedirectTo: authRedirect('confirmed') } });
+        if (err) throw err;
+        resendAvailableAt = Date.now() + RESEND_COOLDOWN_S * 1000;
+        renderAuth(root, { mode: 'check-email', email: addr, notice: `If ${addr} has an unconfirmed SafeHaven account, a new confirmation link is on its way.` });
+      } catch (err) {
+        showError(friendlyError(err));
+        btn.disabled = false;
+      }
+    });
+  });
+
+  if (!form) return;
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    errEl.hidden = true;
+    showError('');
     const fd = new FormData(form);
-    const email = String(fd.get('email') || '').trim();
+    const addr = String(fd.get('email') || '').trim();
     const password = String(fd.get('password') || '');
-    const showError = (msg) => {
-      errEl.textContent = msg;
-      errEl.hidden = false;
-    };
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError('Enter a valid email address.');
-    if (password.length < 8) return showError('Password must be at least 8 characters.');
+    if (!EMAIL_RE.test(addr)) return showError('Enter a valid email address.');
+    if (mode !== 'forgot' && !password) return showError('Enter your password.');
 
     const btn = form.querySelector('button[type="submit"]');
     btn.disabled = true;
     btn.classList.add('is-busy');
+    const release = () => { btn.disabled = false; btn.classList.remove('is-busy'); };
+
     try {
       if (mode === 'signup') {
-        const role = fd.get('role');
+        const r = fd.get('role');
         const displayName = String(fd.get('display_name') || '').trim();
+        if (r !== 'parent' && r !== 'child') throw new Error('Choose who the account is for.');
         if (!displayName) throw new Error('Enter a display name.');
-        if (role !== 'parent' && role !== 'child') throw new Error('Choose who the account is for.');
-        const { data, error } = await sb().auth.signUp({
-          email,
+        const problem = passwordProblem(password);
+        if (problem) throw new Error(problem);
+        if (password !== String(fd.get('password2') || '')) throw new Error('The two passwords don\'t match.');
+
+        clearPendingRole();
+        const { data, error: err } = await sb().auth.signUp({
+          email: addr,
           password,
-          options: { data: { role, display_name: displayName.slice(0, 60) }, emailRedirectTo: window.location.origin }
+          options: { data: { role: r, display_name: displayName.slice(0, 60) }, emailRedirectTo: authRedirect('confirmed') }
         });
-        if (error) throw error;
-        if (!data.session) {
-          renderAuth(root, { mode: 'signin', notice: `Check ${email} for a confirmation link, then sign in.` });
+        if (err) throw err;
+        // With confirmations on, Supabase hides existing addresses: no error, but no identities either
+        if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          release();
+          return renderAuth(root, { mode: 'signin', email: addr, error: 'An account with this email already exists. Sign in, or use "Forgot password?" if you don\'t remember it. If you signed up with Google, use Continue with Google.' });
         }
-        // With a session, liveApp's auth listener mounts the right dashboard
-      } else {
-        const { error } = await sb().auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (!data.session) {
+          resendAvailableAt = Date.now() + RESEND_COOLDOWN_S * 1000;
+          return renderAuth(root, { mode: 'check-email', email: addr });
+        }
+        // With a session, liveApp's auth listener opens the dashboard
+      } else if (mode === 'signin') {
+        clearPendingRole();
+        const { error: err } = await sb().auth.signInWithPassword({ email: addr, password });
+        if (err) {
+          if (err.code === 'email_not_confirmed' || /Email not confirmed/i.test(err.message || '')) {
+            release();
+            return renderAuth(root, { mode: 'signin', email: addr, error: friendlyError(err), unconfirmed: true });
+          }
+          throw err;
+        }
+        // Success is only shown once Supabase returns a session: liveApp mounts the dashboard
+      } else if (mode === 'forgot') {
+        const { error: err } = await sb().auth.resetPasswordForEmail(addr, { redirectTo: authRedirect('recovery') });
+        if (err) throw err;
+        release();
+        // Same message whether or not the address has an account (no account enumeration)
+        return renderAuth(root, { mode: 'signin', email: addr, notice: `If ${addr} has a SafeHaven account, we've sent a link to reset its password. It works once and expires after an hour.` });
       }
+    } catch (err) {
+      showError(friendlyError(err));
+      release();
+    }
+  });
+}
+
+/* Shown after the user opens a password-reset link (they are signed in by that link) */
+export function renderPasswordReset(root, { email = '', onDone, onCancel } = {}) {
+  root.className = 'live-root';
+  root.innerHTML = `
+    <div class="live-auth live-auth--single ${prefersReducedMotion() ? '' : 'is-entering'}">
+      <div class="live-auth__card card">
+        <div class="signin-hero">
+          <span class="signin-hero__mark">${icon('key', 24)}</span>
+          <h1 class="display live-auth__title">Choose a new password</h1>
+          <p class="modal__lede">For <strong>${esc(email)}</strong>. You'll stay signed in on this device.</p>
+        </div>
+        <form class="form" id="live-reset-form" novalidate>
+          ${passwordField('password', 'New password', 'new-password', '8+ characters, letters and numbers')}
+          ${passwordField('password2', 'Confirm new password', 'new-password')}
+          <p class="form-error" id="live-reset-error" role="alert" hidden></p>
+          <button type="submit" class="btn btn--primary btn--block btn--lg">Save new password</button>
+          <button type="button" class="btn btn--ghost btn--block" data-reset-cancel>Cancel and sign out</button>
+        </form>
+      </div>
+    </div>
+  `;
+  const form = root.querySelector('#live-reset-form');
+  const errEl = root.querySelector('#live-reset-error');
+  const showError = (msg) => { errEl.textContent = msg; errEl.hidden = !msg; };
+  root.querySelector('[data-reset-cancel]').addEventListener('click', () => onCancel && onCancel());
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showError('');
+    const fd = new FormData(form);
+    const password = String(fd.get('password') || '');
+    const problem = passwordProblem(password);
+    if (problem) return showError(problem);
+    if (password !== String(fd.get('password2') || '')) return showError('The two passwords don\'t match.');
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.classList.add('is-busy');
+    try {
+      const { error } = await sb().auth.updateUser({ password });
+      if (error) throw error;
+      onDone && onDone();
     } catch (err) {
       showError(friendlyError(err));
       btn.disabled = false;

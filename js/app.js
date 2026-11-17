@@ -12,6 +12,7 @@ import { icon, zoneIcon, clean } from './icons.js';
 import { needsPermissionSetup, openPermissionSetup, startFallDetection, sosCapture } from './permissions.js';
 
 const TOAST_ICONS = { info: 'info', critical: 'siren', warning: 'alert', safe: 'checkCircle' };
+const TOAST_MS = 4500; // keep in sync with --toast-ms in app.css
 
 const esc = (str) => String(str == null ? '' : str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -45,7 +46,7 @@ export function showToast(title, message, type = 'info') {
   `;
 
   const dismiss = () => {
-    if (!toast.parentElement) return;
+    if (!toast.parentElement || toast.classList.contains('is-leaving')) return;
     toast.classList.add('is-leaving');
     setTimeout(() => toast.remove(), 220);
   };
@@ -58,15 +59,28 @@ export function showToast(title, message, type = 'info') {
   else if (type === 'safe') soundFx.playSafeChime();
   else soundFx.playPing();
 
-  setTimeout(dismiss, 4500);
+  // Auto-close after TOAST_MS; hovering pauses the countdown (the bar in the toast pauses with it)
+  let remaining = TOAST_MS;
+  let startedAt = Date.now();
+  let timer = setTimeout(dismiss, remaining);
+  toast.addEventListener('mouseenter', () => {
+    clearTimeout(timer);
+    remaining -= Date.now() - startedAt;
+  });
+  toast.addEventListener('mouseleave', () => {
+    startedAt = Date.now();
+    timer = setTimeout(dismiss, Math.max(remaining, 600));
+  });
 }
 window.showToast = showToast;
 
 // Global Modal Controller
 let modalOnClose = null;
+let modalGen = 0; // a newer open cancels a pending close animation
 
 export function openModal(title, bodyHtml, footerHtml = '', opts = {}) {
   modalOnClose = opts.onClose || null;
+  modalGen += 1;
   let overlay = document.getElementById('global-modal-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -88,6 +102,7 @@ export function openModal(title, bodyHtml, footerHtml = '', opts = {}) {
       ${footerHtml ? `<div class="modal__foot">${footerHtml}</div>` : ''}
     </div>
   `;
+  overlay.classList.remove('is-closing');
   overlay.classList.add('is-open');
   document.body.classList.add('has-modal');
   const focusTarget = overlay.querySelector('.modal__body input, .modal__body button, .modal__foot button') || overlay.querySelector('.icon-btn');
@@ -96,9 +111,20 @@ export function openModal(title, bodyHtml, footerHtml = '', opts = {}) {
 
 export function closeModal() {
   const overlay = document.getElementById('global-modal-overlay');
-  if (overlay) {
-    overlay.classList.remove('is-open');
-    overlay.innerHTML = '';
+  if (overlay && overlay.classList.contains('is-open')) {
+    // Play the exit animation, then clear, unless another modal opened meanwhile
+    const gen = modalGen;
+    const finish = () => {
+      if (gen !== modalGen) return;
+      overlay.classList.remove('is-open', 'is-closing');
+      overlay.innerHTML = '';
+    };
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) finish();
+    else {
+      overlay.classList.add('is-closing');
+      setTimeout(finish, 200);
+    }
   }
   document.body.classList.remove('has-modal');
   mapCtrl.disableLocationPicker();
@@ -376,13 +402,35 @@ window.switchTab = function(tab) {
 };
 
 window.toggleTheme = function() {
-  const current = document.documentElement.getAttribute('data-theme');
-  const next = current === 'dark' ? 'light' : 'dark';
-  document.documentElement.classList.add('theme-switching');
-  document.documentElement.setAttribute('data-theme', next);
-  store.update({ theme: next });
-  mapCtrl.refreshTheme && mapCtrl.refreshTheme();
-  setTimeout(() => document.documentElement.classList.remove('theme-switching'), 300);
+  const root = document.documentElement;
+  const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  const apply = () => {
+    root.setAttribute('data-theme', next);
+    store.update({ theme: next });
+    mapCtrl.refreshTheme && mapCtrl.refreshTheme();
+  };
+
+  // Where supported, the new theme spreads out in a circle from the toggle button
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const btn = document.getElementById('theme-toggle-btn');
+  if (document.startViewTransition && !reduce && btn) {
+    const r = btn.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+    const transition = document.startViewTransition(apply);
+    transition.ready.then(() => {
+      root.animate(
+        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+        { duration: 560, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', pseudoElement: '::view-transition-new(root)' }
+      );
+    }).catch(() => {});
+    return;
+  }
+
+  root.classList.add('theme-switching');
+  apply();
+  setTimeout(() => root.classList.remove('theme-switching'), 300);
 };
 
 window.toggleAudioMute = function() {

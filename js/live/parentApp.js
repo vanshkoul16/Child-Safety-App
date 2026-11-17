@@ -4,7 +4,8 @@
    location, safe zones, zone events and SOS alerts.
    ========================================================= */
 
-import { sb, call, esc, ago, clock, fullTime, friendlyError, avatarHtml, LIVE_MS, STALE_MS, config } from './api.js';
+import { sb, call, esc, ago, clock, fullTime, friendlyError, avatarHtml, LIVE_MS, STALE_MS, config, copyText, providerLabel, flashDone } from './api.js';
+import { playEnter } from '../motion.js';
 import { LiveMap } from './liveMap.js';
 import { pushState, enablePush, disablePush } from './push.js';
 import { icon } from '../icons.js';
@@ -54,6 +55,7 @@ export class ParentApp {
   constructor(root, profile, session) {
     this.root = root;
     this.me = profile;
+    this.user = session.user;
     this.email = session.user.email;
     this.map = new LiveMap();
     this.s = {
@@ -69,7 +71,8 @@ export class ParentApp {
       sos: [],
       notifs: [],
       selected: null,
-      invite: null,
+      invite: null,      // code just created on this device (shown once)
+      openInvite: null,  // { created_at, expires_at } of any unused code, from the server
       push: 'unknown',
       filter: 'all',
       overlayDismissed: new Set(),
@@ -154,15 +157,19 @@ export class ParentApp {
   async load() {
     try {
       const c = sb();
-      const links = await c.from('family_links').select('child_id, created_at');
+      const [links, inviteStatus] = await Promise.all([
+        c.from('family_links').select('child_id, created_at'),
+        call('get_link_invite_status').catch(() => null)
+      ]);
       if (links.error) throw links.error;
+      this.s.openInvite = inviteStatus ? inviteStatus.open : null;
       const ids = links.data.map((l) => l.child_id);
 
       if (!ids.length) {
         Object.assign(this.s, { loading: false, error: '', children: [], latest: {}, zones: [], states: [], events: [], sos: [], notifs: [] });
       } else {
         const [profiles, zones, states, events, sos, ...latest] = await Promise.all([
-          c.from('profiles').select('id, display_name, tracking_state, tracking_state_at, location_retention_days').in('id', ids).order('display_name'),
+          c.from('profiles').select('id, public_id, display_name, tracking_state, tracking_state_at, location_retention_days').in('id', ids).order('display_name'),
           c.from('safe_zones').select('*').in('child_id', ids).order('created_at'),
           c.from('zone_states').select('*').in('child_id', ids),
           c.from('zone_events').select('*').in('child_id', ids).order('occurred_at', { ascending: false }).limit(100),
@@ -285,6 +292,12 @@ export class ParentApp {
     if (s.tab !== 'map') this.screen(s.tab).innerHTML = this[`render_${s.tab}`]();
     if (s.tab === 'map') this.renderMap();
     this.renderSosOverlay();
+
+    // Cascade the page in when a tab opens or the first data arrives (never on routine refreshes)
+    const arrived = this.renderedLoading && !s.loading;
+    if (s.tab !== 'map' && (s.tab !== this.renderedTab || arrived)) playEnter(this.screen(s.tab));
+    this.renderedTab = s.tab;
+    this.renderedLoading = s.loading;
   }
 
   region(name) {
@@ -308,8 +321,13 @@ export class ParentApp {
     `;
   }
 
-  loadingBlock() {
-    return `<div class="live-loading">${icon('locate', 22)}<span>Loading your family…</span></div>`;
+  // Placeholder shaped like the page that is loading ('home' = status + child cards, otherwise a list)
+  loadingBlock(kind = 'list') {
+    const shape = kind === 'home'
+      ? `<div class="sk-row"><div class="sk sk--hero"></div><div class="sk sk--side"></div></div>
+         <div class="sk-cards"><div class="sk sk--card"></div><div class="sk sk--card"></div><div class="sk sk--card"></div></div>`
+      : '<div class="sk sk--row"></div><div class="sk sk--row"></div><div class="sk sk--row"></div>';
+    return `<div class="sk-wrap" role="status" aria-busy="true"><span class="sr-only">Loading your family…</span>${shape}</div>`;
   }
 
   render_home() {
@@ -320,7 +338,7 @@ export class ParentApp {
     const head = this.pageHead(today, `${greeting}, ${esc(this.me.display_name.split(' ')[0])}`, 'Live status from your children\'s devices.',
       s.children.length ? `<button class="btn btn--soft" data-tab="map">${icon('map', 16)} Open live map</button>` : '');
 
-    if (s.loading) return head + this.loadingBlock();
+    if (s.loading) return head + this.loadingBlock('home');
     if (!s.children.length) {
       return head + `
         <section class="card live-empty">
@@ -549,21 +567,31 @@ export class ParentApp {
     const inviteCard = inv && remaining > 0 ? `
       <section class="card live-invite">
         <div class="pair">
-          <div class="pair__code" aria-label="Invite code ${esc(inv.code)}">${esc(inv.code.replace('-', '')).split('').map((d) => `<span>${d}</span>`).join('')}</div>
+          <div class="pair__code ${Date.now() - (s.inviteShownAt || 0) < 1500 ? 'is-new' : ''}" aria-label="Invite code ${esc(inv.code)}">${esc(inv.code.replace('-', '')).split('').map((d, i) => `<span style="--i:${i}">${d}</span>`).join('')}</div>
           <p class="pair__hint">${icon('clock', 13)} Expires at ${clock(inv.expires_at)} (${Math.ceil(remaining / 60000)} min) · works once</p>
         </div>
         <p class="fine">On your child's phone: sign in to their SafeHaven child account and enter this code. The link is only created when they do.</p>
+        <button class="btn btn--ghost btn--sm" data-action="revoke-invite">Cancel this code</button>
       </section>
-    ` : inv ? `<div class="live-note tone-attention">${icon('clock', 16)}<span>Your last invite code expired. Create a new one.</span></div>` : '';
+    ` : inv && !s.openInvite ? `<div class="live-note tone-attention">${icon('clock', 16)}<span>Your last invite code expired. Create a new one.</span></div>` : '';
 
-    return head + inviteCard + `
+    // A code exists on the server but isn't on this screen (created earlier or on another device).
+    // Only its hash is stored, so it can't be shown again.
+    const open = s.openInvite;
+    const pendingCard = open && !(inv && remaining > 0) ? `
+      <div class="live-note tone-info">${icon('clock', 16)}<span><strong>Pending:</strong> an invite code is waiting to be used until ${clock(open.expires_at)}. Codes are shown only once — if you no longer have it, create a new one (the old one stops working).</span>
+        <button class="btn btn--soft btn--sm" data-action="revoke-invite">Cancel code</button>
+      </div>
+    ` : '';
+
+    return head + inviteCard + pendingCard + `
       <section class="card card--flush">
         <div class="card-head card-head--pad"><div><h3 class="card-title">Linked children</h3><p class="card-sub">Only you and other linked guardians can see their data.</p></div></div>
         ${s.children.length ? `<ul class="rows">${s.children.map((c) => `
           <li class="row live-family-row">
             ${avatarHtml(c.display_name, 'sm')}
             <div class="row__body">
-              <div class="row__title">${esc(c.display_name)}</div>
+              <div class="row__title">${esc(c.display_name)} ${c.public_id ? `<span class="mono live-public-id">${esc(c.public_id)}</span>` : ''}</div>
               <div class="row__sub">Linked ${new Date(c.linked_at).toLocaleDateString()} · ${this.s.zones.filter((z) => z.child_id === c.id).length} safe zones</div>
             </div>
             <label class="live-inline-field">
@@ -618,7 +646,14 @@ export class ParentApp {
           <section class="group">
             <h3 class="group__title">${icon('user', 15)} Account</h3>
             <div class="card card--flush">
-              <div class="row">${avatarHtml(this.me.display_name, 'sm')}<div class="row__body"><div class="row__title">${esc(this.me.display_name)}</div><div class="row__sub">${esc(this.email)} · Guardian</div></div></div>
+              <div class="row">${avatarHtml(this.me.display_name, 'sm')}<div class="row__body"><div class="row__title">${esc(this.me.display_name)}</div><div class="row__sub">${esc(this.email)} · Guardian · signs in with ${esc(providerLabel(this.user))}</div></div></div>
+              ${this.me.public_id ? `
+                <div class="row">
+                  <div class="row__body"><div class="row__title">Parent ID</div><div class="row__sub">Your public account ID. Sharing it does not give anyone access — linking always needs a one-time invite code.</div></div>
+                  <span class="mono live-public-id live-public-id--lg">${esc(this.me.public_id)}</span>
+                  <button class="btn btn--soft btn--sm" data-action="copy-id" aria-label="Copy Parent ID">${icon('copy', 14)} Copy</button>
+                </div>
+              ` : ''}
               <button class="row row--control" data-action="signout"><div class="row__body"><div class="row__title">Sign out</div></div>${icon('logOut', 16)}</button>
             </div>
           </section>
@@ -785,6 +820,13 @@ export class ParentApp {
       case 'unlink': this.confirmUnlink(id); break;
       case 'signout': sb().auth.signOut(); break;
       case 'demo': window.enterDemoMode(); break;
+      case 'copy-id':
+        copyText(this.me.public_id).then((ok) => {
+          if (ok) flashDone(el, `${icon('check', 14)} Copied`);
+          else showToast('Couldn\'t copy', 'Select the ID and copy it manually.', 'warning');
+        });
+        break;
+      case 'revoke-invite': this.revokeInvite(); break;
       case 'cancel-pick': this.endPick(); break;
       default: break;
     }
@@ -836,11 +878,25 @@ export class ParentApp {
     try {
       const rows = await call('create_link_invite');
       this.s.invite = rows[0];
+      this.s.inviteShownAt = Date.now(); // lets the new code flip in once
+      this.s.openInvite = { created_at: new Date().toISOString(), expires_at: rows[0].expires_at };
       this.s.tab = 'family';
       this.render();
       showToast('Invite code ready', 'Enter it on your child\'s phone within 15 minutes.', 'safe');
     } catch (err) {
       showToast('Couldn\'t create a code', err.message, 'warning');
+    }
+  }
+
+  async revokeInvite() {
+    try {
+      await call('revoke_link_invite');
+      this.s.invite = null;
+      this.s.openInvite = null;
+      this.render();
+      showToast('Code cancelled', 'The invite code no longer works.', 'info');
+    } catch (err) {
+      showToast('Couldn\'t cancel the code', err.message, 'warning');
     }
   }
 

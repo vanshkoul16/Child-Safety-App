@@ -5,7 +5,7 @@ SafeHaven now runs in two clearly separated modes:
 | | **Live mode** (default) | **Demo mode** |
 |---|---|---|
 | Data | Real accounts and real device locations in Supabase | The original prototype: a made-up family with synthetic locations in `localStorage` |
-| Labelling | Role tag in the top bar (Guardian / Child device) | Blue "Demo mode" banner on every screen |
+| Labelling | Green "Live mode" tag and role tag (Guardian / Child device) in the top bar | Blue "Demo mode" tag and banner on every screen |
 | How to switch | Sign-in screen → *Explore the demo*, or Settings → *Switch to demo mode* | Banner → *Use live mode* |
 
 Nothing in demo mode is sent anywhere, and live mode never shows synthetic data.
@@ -24,7 +24,7 @@ SOS (tap + confirm) ───────RPC──▶  raise_sos()  snapshot of 
                                      (service-role key, VAPID private key)     ◀── posts delivery receipt
 ```
 
-- **Auth**: Supabase email + password. Role (`parent` / `child`) is chosen at sign-up and fixed by a database trigger; users cannot change it.
+- **Auth**: Supabase Auth with **Continue with Google** (OAuth, PKCE) or email + password (confirmation, resend, forgot/reset password). Role (`parent` / `child`) is chosen at sign-up; Google accounts confirm it on a one-time setup screen (`complete_onboarding()`). Either way the database fixes it permanently, and each account gets a public Parent ID / Child ID. Setup steps for Google Cloud and Supabase: **[AUTH_SETUP.md](AUTH_SETUP.md)**.
 - **Linking**: the guardian creates a one-time code (8 characters, 15-minute expiry, only a SHA-256 hash is stored). The **child** enters it on their own signed-in device to complete the link. Wrong codes are throttled (10 per 15 minutes).
 - **Authorization** is enforced in Postgres with Row Level Security on every table, plus `SECURITY DEFINER` functions for writes that need validation. The browser only ever holds the public anon key.
 - **Realtime** uses Supabase `postgres_changes`, which applies the same RLS policies per subscriber, so a guardian only receives rows for their own linked children.
@@ -75,9 +75,11 @@ To try both roles on one computer, use two browser profiles, or `http://localhos
 npm run lint                # syntax-checks all JS; fails if browser code references a server secret
 npm test                    # original demo-logic tests
 npm run test:integration    # needs the local Supabase stack running
+npm run test:db             # pgTAP tests for the sign-up trigger and onboarding (local stack)
 ```
 
-The integration suite (18 tests) covers:
+The integration suite (28 tests) covers:
+- account onboarding for Google-style accounts (no access until set up, role assigned once and never changed, parallel calls, anonymous callers), permanent public Parent / Child IDs that can't be used to look up or link anyone, pending-invite status and cancellation, signing in again
 - roles and RLS isolation (anonymous users, other families, children vs parents)
 - invite expiry, single use, revocation and brute-force throttling
 - location validation and rate limiting
@@ -94,11 +96,12 @@ The integration suite (18 tests) covers:
 1. Create a project at [supabase.com](https://supabase.com). Choose a region close to your users.
 2. Apply the schema, either:
    - `npx supabase link --project-ref <ref>` then `npm run db:push`, or
-   - paste `supabase/migrations/20261022000000_safehaven_live.sql` into the SQL editor and run it once.
-3. **Authentication → URL configuration**: set *Site URL* to your app's HTTPS origin, and add it to *Redirect URLs* (used by email-confirmation links).
-4. **Authentication → Providers → Email**: keep *Confirm email* on for production. The app shows "check your email" when sign-up returns no session. Set the minimum password length to 8 or more.
-5. **Project Settings → API**: copy the URL, the anon/publishable key (public) and the service-role/secret key (**server only**) into your host's environment variables.
-6. Realtime is enabled by the migration (`alter publication supabase_realtime add table …`). Check that it is listed under Database → Publications.
+   - paste each file in `supabase/migrations/` into the SQL editor, in name order, and run each once (`20261022000000_safehaven_live.sql`, then `20261115000000_oauth_onboarding.sql`).
+3. **Authentication → URL configuration**: set *Site URL* to your app's HTTPS origin, and add `https://<your-app-domain>/**` and `http://localhost:3000/**` to *Redirect URLs* (used by Google sign-in, confirmation and reset links).
+4. **Authentication → Providers → Email**: keep *Confirm email* on for production. The app shows "check your email" when sign-up returns no session. Set the minimum password length to 8 or more. Configure custom SMTP so emails reach real users.
+5. **Google sign-in**: follow [AUTH_SETUP.md](AUTH_SETUP.md) (Google Cloud OAuth client + Supabase Google provider).
+6. **Project Settings → API**: copy the URL, the anon/publishable key (public) and the service-role/secret key (**server only**) into your host's environment variables.
+7. Realtime is enabled by the migration (`alter publication supabase_realtime add table …`). Check that it is listed under Database → Publications.
 
 ## Push notifications
 
@@ -135,6 +138,8 @@ The static server only serves `index.html`, `manifest.json`, `sw.js`, `LICENSE` 
 
 ### Completed and tested
 - [x] Supabase Auth sign-up, sign-in, sign-out, persistent sessions; parent and child roles fixed at sign-up — *integration + browser*
+- [x] Email confirmation with resend, duplicate-email handling, forgot password and reset links, password rules — *browser*
+- [x] Google sign-in (OAuth + PKCE) up to Google's account chooser, cancelled-consent handling, first-time setup with permanent role for Google accounts, public Parent / Child IDs with copy — *integration + pgTAP + browser* (full Google consent needs your OAuth client, see AUTH_SETUP.md)
 - [x] Expiring, single-use, hashed invite codes; child completes the link; brute-force throttling — *integration + browser*
 - [x] RLS on every table; cross-family access blocked for reads and writes; anonymous access blocked — *integration + browser*
 - [x] Child location sharing with explicit start, visible indicator, pause, and honest *denied / unavailable / not linked* states reported to guardians — *browser*
@@ -155,11 +160,12 @@ The static server only serves `index.html`, `manifest.json`, `sw.js`, `LICENSE` 
 - **Real browser push has not been tested end-to-end.** The server path was verified against a mock push service with real encryption, but the embedded browser blocks notifications.
 - If the child's phone saves the SOS but cannot reach `/api/live/sos-notify` (e.g. it goes offline at that moment), the SOS is stored and appears on open guardian dashboards, but no push is sent. A Supabase Database Webhook calling the notify endpoint would make this independent of the child's connection.
 - The API rate limiter in `server/liveApi.js` is in-memory (per process). Use a shared store (e.g. Redis) when running more than one instance. Database-level limits (locations, SOS, invites) are already shared.
-- **Not yet in live mode** (still demo-only): route corridors and deviation, turn-by-turn directions, "I'm safe" check-ins, SMS to contacts, SOS audio/video recording, fall detection, safe-zone schedules and restricted zones, location trail history, guardian-raised SOS, password reset.
-- Child accounts use email and password. Very young children may need a guardian-managed sign-in flow.
+- **Not yet in live mode** (still demo-only): route corridors and deviation, turn-by-turn directions, "I'm safe" check-ins, SMS to contacts, SOS audio/video recording, fall detection, safe-zone schedules and restricted / warning zones, location trail history, guardian-raised SOS.
+- Child accounts use their own Google account or email and password. Very young children may need a guardian-managed sign-in flow.
 
 ### Needs your credentials or a real device
-- [ ] Create a hosted Supabase project, apply the migration, set the Auth URLs and copy the keys (see *Hosted Supabase*).
+- [ ] Create a hosted Supabase project, apply both migrations, set the Auth URLs and copy the keys (see *Hosted Supabase*).
+- [ ] Create the Google OAuth client and enable the Google provider in Supabase ([AUTH_SETUP.md](AUTH_SETUP.md)), then sign in once as a guardian and once as a child with real Gmail accounts.
 - [ ] Generate production VAPID keys and set `VAPID_SUBJECT` to a real contact.
 - [ ] Choose a production map-tile provider and set `MAP_TILE_URL`.
 - [ ] Deploy to an HTTPS host (e.g. Render) with the environment variables.
