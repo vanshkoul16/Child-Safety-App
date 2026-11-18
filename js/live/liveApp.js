@@ -18,6 +18,7 @@ let current = null;   // mounted ParentApp / ChildApp
 let currentUserId = null;
 let root = null;
 let recovering = false; // signed in by a password-reset link: ask for a new password first
+let afterSignOut = null; // auth screen options to show after the next sign-out (e.g. back to sign-up)
 
 const AUTH_PARAMS = ['auth', 'code', 'error', 'error_code', 'error_description', 'state', 'token_hash', 'type'];
 
@@ -103,6 +104,7 @@ function openAccountModal(profile, user) {
         </div>
         <p class="fine">Your public ID identifies this account. It can't be used to link accounts or see anyone's data — that always needs a one-time invite code.</p>
       ` : ''}
+      <button class="btn btn--soft btn--block account__edit" data-acct="profile">${icon('user', 16)} Edit profile</button>
       <button class="btn btn--danger-soft btn--block" data-acct="signout">${icon('logOut', 16)} Sign out</button>
       <div class="divider"><span>or</span></div>
       <button class="btn btn--soft btn--block" data-acct="demo">${icon('play', 16)} Switch to demo mode</button>
@@ -119,6 +121,10 @@ function openAccountModal(profile, user) {
       else showToast('Couldn\'t copy', 'Select the ID and copy it manually.', 'warning');
     });
   }
+  o.querySelector('[data-acct="profile"]').addEventListener('click', () => {
+    closeModal();
+    if (current && current.openProfile) current.openProfile();
+  });
   o.querySelector('[data-acct="signout"]').addEventListener('click', async () => {
     closeModal();
     await sb().auth.signOut();
@@ -212,8 +218,20 @@ async function mountSession(session, { welcome = false, confirmed = false } = {}
     return;
   }
 
+  // Set only by "Sign up with Google" on this device. Onboarding clears it, so it survives
+  // only when Google signed in to an account that already existed.
   const pending = readPendingRole();
   clearPendingRole();
+  if (pending && pending !== profile.role) {
+    // Asked for one account type, but this Google account (or its email) already has the other:
+    // stop here instead of quietly opening the other dashboard
+    showRoleConflict(session, profile, pending);
+    return;
+  }
+  await mountDashboard(session, profile, { welcome, confirmed, existing: Boolean(pending) });
+}
+
+async function mountDashboard(session, profile, { welcome = false, confirmed = false, existing = false } = {}) {
   setChrome(profile, session.user);
   document.body.dataset.mode = profile.role === 'parent' ? 'parent' : 'child';
   current = profile.role === 'parent'
@@ -222,13 +240,43 @@ async function mountSession(session, { welcome = false, confirmed = false } = {}
   await current.mount();
 
   const kind = profile.role === 'parent' ? 'Guardian' : 'Child';
-  if (pending && pending !== profile.role) {
-    showToast('Signed in to your existing account', `This Google account already has a ${kind} account, so you're signed in to it. Account types can't be changed.`, 'info');
-  } else if (welcome) {
+  if (welcome) {
     showToast('Account created', `Your ${kind} ID is ${profile.public_id}.`, 'safe');
+  } else if (existing) {
+    showToast('Signed in to your existing account', `${session.user.email || 'This account'} already had a ${kind} account, so no new account was created.`, 'info');
   } else if (confirmed) {
     showToast('Email confirmed', 'Your SafeHaven account is active.', 'safe');
   }
+}
+
+/* Sign-up asked for `wanted`, but the signed-in account is already the other type */
+function showRoleConflict(session, profile, wanted) {
+  setChrome(null);
+  const has = profile.role === 'parent' ? 'Guardian' : 'Child';
+  const want = wanted === 'parent' ? 'Guardian' : 'Child';
+  const email = session.user.email || '';
+  root.className = 'live-root';
+  root.innerHTML = `
+    <div class="locked role-conflict" role="alert">
+      <div class="locked__mark">${icon('alert', 26)}</div>
+      <h1 class="display">Already a ${has} account</h1>
+      <p class="lede">${email ? `<strong>${esc(email)}</strong>` : 'This account'} already has a SafeHaven ${has} account${profile.public_id ? ` (<span class="mono">${esc(profile.public_id)}</span>)` : ''}, so no ${want} account was created. Each Google account or email can have only one account type, and it can't be changed.</p>
+      <p class="lede">To create a ${want} account, sign out and sign up again with a different Google account or email${wanted === 'child' ? ' — ideally the child’s own' : ''}.</p>
+      <div class="hero__actions">
+        <button class="btn btn--primary" data-conflict="switch">${icon('logOut', 16)} Sign out and use another account</button>
+        <button class="btn btn--soft" data-conflict="continue">Continue as ${has}</button>
+      </div>
+    </div>
+  `;
+  root.querySelector('[data-conflict="switch"]').addEventListener('click', (e) => {
+    e.currentTarget.disabled = true;
+    afterSignOut = { mode: 'signup', role: wanted, notice: `Signed out. ${want} is selected below — now sign up with a different Google account or email.` };
+    sb().auth.signOut();
+  });
+  root.querySelector('[data-conflict="continue"]').addEventListener('click', (e) => {
+    e.currentTarget.disabled = true;
+    mountDashboard(session, profile);
+  });
 }
 
 export async function startLive() {
@@ -243,6 +291,10 @@ export async function startLive() {
   };
   refreshTopbar();
   store.subscribe(refreshTopbar);
+  // The Profile tab saved a new name: keep the account chip in the top bar in step
+  window.addEventListener('safehaven:profile-updated', (e) => {
+    if (current && e.detail && e.detail.profile && e.detail.profile.id === currentUserId) setChrome(e.detail.profile, e.detail.user);
+  });
 
   document.getElementById('main-viewport').hidden = true;
   root = document.getElementById('live-root');
@@ -305,7 +357,9 @@ export async function startLive() {
         mountSession(s);
       } else if (event === 'SIGNED_OUT') {
         recovering = false;
-        showAuth();
+        const opts = afterSignOut || undefined;
+        afterSignOut = null;
+        showAuth(opts);
       }
     }, 0);
   });

@@ -2777,3 +2777,55 @@ body[data-app="live"] .mode-switch { visibility: hidden; }
   .auth-showcase::before, .auth-showcase::after, .sk::after { animation: none !important; }
   .btn:hover, .child-card:hover, .kid-action:hover, .sos:hover, .choice:hover { transform: none !important; }
 }
+
+/* =========================================================
+   Profile tab (live mode, guardian and child)
+   ========================================================= */
+.profile-tab { display: flex; flex-direction: column; gap: 24px; max-width: 720px; }
+.kid .profile-tab { gap: 18px; }
+.avatar--xl { width: 72px; height: 72px; }
+.live-avatar.avatar--xl { font-size: 26px; }
+
+.profile-hero { display: flex; align-items: center; gap: 18px; }
+.profile-hero__body { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.profile-hero__name { font-family: var(--serif); font-weight: 400; font-size: 30px; line-height: 1.1; letter-spacing: -0.01em; color: var(--ink); overflow-wrap: anywhere; }
+.profile-hero__meta { font-size: 13.5px; color: var(--muted); overflow-wrap: anywhere; }
+.profile-hero__edit { flex-shrink: 0; }
+
+.profile-details { margin: 0; }
+.profile-details__row { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 14px 20px; border-top: 1px solid var(--line); }
+.profile-details__row:first-child { border-top: 0; }
+.profile-details dt { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.profile-details dt .ic { flex-shrink: 0; color: var(--subtle); }
+.profile-details dd { margin: 0; font-size: 14.5px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.profile-details dd a { color: var(--accent-text); text-decoration: none; }
+.profile-details dd a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.profile-details__multiline { white-space: pre-line; }
+.profile-details__empty { font-weight: 400; color: var(--subtle); }
+.profile-note { margin: 12px 0 0; }
+.profile-form .profile-note { margin: 0; }
+
+.profile-form { gap: 16px; }
+.field__hint { font-size: 12px; font-weight: 400; color: var(--subtle); }
+.input--area { height: auto; min-height: 84px; padding: 10px 12px; line-height: 1.45; resize: vertical; }
+.profile-form__actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.row__hint { flex-shrink: 0; font-size: 13px; font-weight: 500; color: var(--accent-text); }
+.account__edit { margin-bottom: 8px; }
+
+/* Child: My safety / Profile switch */
+.kid-tabs { display: flex; width: 100%; }
+.kid-tabs .seg__btn { flex: 1; height: 36px; }
+.kid-sos-note { width: 100%; border: 0; text-align: left; cursor: pointer; font: inherit; }
+
+@media (max-width: 520px) {
+  .profile-hero { flex-wrap: wrap; gap: 14px; }
+  .profile-hero__name { font-size: 26px; }
+  .profile-hero__edit { width: 100%; }
+  .profile-details__row { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 12px 16px; }
+  .profile-form__actions .btn { flex: 1; }
+  .row__hint { display: none; }
+}
+
+/* Sign-up asked for one account type, but the account already has the other */
+.role-conflict .lede + .lede { margin-top: -10px; }

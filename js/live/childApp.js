@@ -10,6 +10,7 @@ import { Tracker } from './tracker.js';
 import { icon } from '../icons.js';
 import { openModal, closeModal, showToast } from '../app.js';
 import { soundFx } from '../audioNotifier.js';
+import { ProfileTab } from './profileView.js';
 
 export class ChildApp {
   constructor(root, profile, hooks) {
@@ -27,12 +28,14 @@ export class ChildApp {
       sosSending: false,
       sosNotify: null, // server summary for the open SOS
       linking: false,
-      offline: !navigator.onLine
+      offline: !navigator.onLine,
+      view: 'home' // 'home' | 'profile'
     };
     this.tracker = new Tracker(() => this.onTracker());
     this.channel = null;
     this.timers = [];
     this.lastSentSeen = null;
+    this.profile = new ProfileTab(profile, hooks.user, () => this.render(true));
   }
 
   async mount() {
@@ -40,6 +43,7 @@ export class ChildApp {
     this.root.className = 'child-view live-child';
     this.root.addEventListener('click', (e) => this.onClick(e));
     this.root.addEventListener('submit', (e) => this.onSubmit(e));
+    this.root.addEventListener('input', (e) => this.profile.onInput(e));
     window.addEventListener('online', this._online = () => { this.s.offline = false; this.render(); this.load(); });
     window.addEventListener('offline', this._offline = () => { this.s.offline = true; this.render(); });
     this.render();
@@ -133,7 +137,12 @@ export class ChildApp {
     // Don't wipe the invite code while the child is typing it
     const a = document.activeElement;
     if (!force && a && a.name === 'code' && this.root.contains(a)) return;
+    // ...or the profile form while it's being filled in
+    if (!force && this.profile.isBusy(this.root)) return;
+    const viewChanged = this.renderedView !== undefined && this.renderedView !== this.s.view;
     this.root.innerHTML = this.html();
+    if (viewChanged) playEnter(this.root);
+    this.renderedView = this.s.view;
     // Cascade the dashboard in once, when the first data replaces the placeholder
     if (this.renderedLoading && !this.s.loading) playEnter(this.root);
     this.renderedLoading = this.s.loading;
@@ -157,8 +166,19 @@ export class ChildApp {
         </div>`;
     }
 
+    if (s.view === 'profile') {
+      return `
+        <div class="kid">
+          ${this.viewTabs()}
+          ${s.openSos ? `<button class="live-note tone-danger kid-sos-note" data-view="home">${icon('siren', 16)}<span>Your SOS is active. Go back to My safety to see its status.</span>${icon('chevronRight', 16)}</button>` : ''}
+          ${this.profile.html()}
+        </div>
+      `;
+    }
+
     return `
       <div class="kid">
+        ${this.viewTabs()}
         ${s.offline ? `<div class="live-note tone-attention" role="status">${icon('signal', 16)}<span>You're offline. Location and SOS will send when the connection returns — if it's urgent, call 112.</span></div>` : ''}
         ${s.error ? `<div class="live-note tone-danger" role="alert">${icon('alert', 16)}<span>${esc(s.error)}</span><button class="btn btn--soft btn--sm" data-action="reload">Retry</button></div>` : ''}
 
@@ -213,6 +233,17 @@ export class ChildApp {
     `;
   }
 
+  viewTabs() {
+    const tab = (key, label) => `<button class="seg__btn ${this.s.view === key ? 'active' : ''}" role="tab" aria-selected="${this.s.view === key}" data-view="${key}">${label}</button>`;
+    return `<div class="seg kid-tabs" role="tablist" aria-label="Sections">${tab('home', 'My safety')}${tab('profile', 'Profile')}</div>`;
+  }
+
+  openProfile() {
+    this.s.view = 'profile';
+    this.render(true);
+    window.scrollTo({ top: 0 });
+  }
+
   accountCard() {
     const user = this.hooks.user;
     return `
@@ -223,6 +254,7 @@ export class ChildApp {
           <span class="mono live-public-id live-public-id--lg">${esc(this.me.public_id || '—')}</span>
           ${this.me.public_id ? `<button class="btn btn--soft btn--sm" data-action="copy-id" aria-label="Copy Child ID">${icon('copy', 14)} Copy</button>` : ''}
         </div>
+        <button class="row row--control" data-view="profile"><div class="row__body"><div class="row__title">My profile</div><div class="row__sub">Change your name and personal details.</div></div>${icon('chevronRight', 16)}</button>
         <button class="row row--control" data-action="signout"><div class="row__body"><div class="row__title">Sign out</div><div class="row__sub">Location sharing stops on this device.</div></div>${icon('logOut', 16)}</button>
       </section>
     `;
@@ -320,6 +352,14 @@ export class ChildApp {
   /* ---------------- actions ---------------- */
 
   onClick(e) {
+    if (this.profile.onClick(e)) return;
+    const viewBtn = e.target.closest('[data-view]');
+    if (viewBtn && this.root.contains(viewBtn)) {
+      this.s.view = viewBtn.dataset.view;
+      this.render(true);
+      window.scrollTo({ top: 0 });
+      return;
+    }
     const el = e.target.closest('[data-action]');
     if (!el || el.disabled) return;
     const a = el.dataset.action;
@@ -339,6 +379,7 @@ export class ChildApp {
   }
 
   async onSubmit(e) {
+    if (this.profile.onSubmit(e)) return;
     const form = e.target.closest('[data-form="link"]');
     if (!form) return;
     e.preventDefault();

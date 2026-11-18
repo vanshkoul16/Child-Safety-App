@@ -11,12 +11,14 @@ import { pushState, enablePush, disablePush } from './push.js';
 import { icon } from '../icons.js';
 import { openModal, closeModal, showToast } from '../app.js';
 import { soundFx } from '../audioNotifier.js';
+import { ProfileTab } from './profileView.js';
 
 const TABS = [
   { key: 'home', label: 'Home', ic: 'home' },
   { key: 'map', label: 'Map', ic: 'map' },
   { key: 'alerts', label: 'Alerts', ic: 'bell' },
   { key: 'family', label: 'Family', ic: 'users' },
+  { key: 'profile', label: 'Profile', ic: 'user' },
   { key: 'settings', label: 'Settings', ic: 'sliders' }
 ];
 
@@ -84,6 +86,7 @@ export class ParentApp {
     this.timers = [];
     this.channel = null;
     this.picking = null;
+    this.profile = new ProfileTab(profile, session.user, () => this.render(true));
   }
 
   async mount() {
@@ -121,11 +124,14 @@ export class ParentApp {
         </section>
         <section class="screen" data-screen="alerts"></section>
         <section class="screen" data-screen="family"></section>
+        <section class="screen" data-screen="profile"></section>
         <section class="screen" data-screen="settings"></section>
       </div>
     `;
     this.root.addEventListener('click', (e) => this.onClick(e));
     this.root.addEventListener('change', (e) => this.onChange(e));
+    this.root.addEventListener('input', (e) => this.profile.onInput(e));
+    this.root.addEventListener('submit', (e) => this.profile.onSubmit(e));
     window.addEventListener('online', this._online = () => { this.s.offline = false; this.load(); });
     window.addEventListener('offline', this._offline = () => { this.s.offline = true; this.render(); });
     if (navigator.serviceWorker) {
@@ -269,7 +275,7 @@ export class ParentApp {
 
   /* ---------------- rendering ---------------- */
 
-  render() {
+  render(force = false) {
     const s = this.s;
     document.body.dataset.tab = s.tab;
     this.root.querySelectorAll('.nav-item').forEach((b) => {
@@ -289,7 +295,9 @@ export class ParentApp {
       s.error ? `<div class="live-note tone-danger" role="alert">${icon('alert', 16)}<span>Couldn't load live data: ${esc(s.error)}</span><button class="btn btn--soft btn--sm" data-action="reload">Retry</button></div>` : ''
     ].join('');
 
-    if (s.tab !== 'map') this.screen(s.tab).innerHTML = this[`render_${s.tab}`]();
+    // Routine refreshes leave the profile form alone while it's being typed in
+    const keepProfile = !force && s.tab === 'profile' && this.renderedTab === 'profile' && this.profile.isBusy(this.root);
+    if (s.tab !== 'map' && !keepProfile) this.screen(s.tab).innerHTML = this[`render_${s.tab}`]();
     if (s.tab === 'map') this.renderMap();
     this.renderSosOverlay();
 
@@ -611,6 +619,16 @@ export class ParentApp {
     `;
   }
 
+  render_profile() {
+    return this.pageHead('Account', 'Profile', 'Your name and personal details.') + this.profile.html();
+  }
+
+  openProfile() {
+    this.s.tab = 'profile';
+    this.render(true);
+    window.scrollTo({ top: 0 });
+  }
+
   render_settings() {
     const s = this.s;
     const pushCopy = {
@@ -646,7 +664,7 @@ export class ParentApp {
           <section class="group">
             <h3 class="group__title">${icon('user', 15)} Account</h3>
             <div class="card card--flush">
-              <div class="row">${avatarHtml(this.me.display_name, 'sm')}<div class="row__body"><div class="row__title">${esc(this.me.display_name)}</div><div class="row__sub">${esc(this.email)} · Guardian · signs in with ${esc(providerLabel(this.user))}</div></div></div>
+              <button class="row row--control" data-tab="profile">${avatarHtml(this.me.display_name, 'sm')}<div class="row__body"><div class="row__title">${esc(this.me.display_name)}</div><div class="row__sub">${esc(this.email)} · Guardian · signs in with ${esc(providerLabel(this.user))}</div></div><span class="row__hint">Edit profile</span>${icon('chevronRight', 16)}</button>
               ${this.me.public_id ? `
                 <div class="row">
                   <div class="row__body"><div class="row__title">Parent ID</div><div class="row__sub">Your public account ID. Sharing it does not give anyone access — linking always needs a one-time invite code.</div></div>
@@ -776,6 +794,7 @@ export class ParentApp {
   /* ---------------- actions ---------------- */
 
   onClick(e) {
+    if (this.profile.onClick(e)) return;
     const tabBtn = e.target.closest('[data-tab]');
     if (tabBtn && this.root.contains(tabBtn)) {
       this.s.tab = tabBtn.dataset.tab;
