@@ -11,6 +11,7 @@ import { icon } from '../icons.js';
 import { openModal, closeModal, showToast } from '../app.js';
 import { soundFx } from '../audioNotifier.js';
 import { ProfileTab } from './profileView.js';
+import { isRestricted } from './zones.js';
 
 export class ChildApp {
   constructor(root, profile, hooks) {
@@ -68,7 +69,8 @@ export class ChildApp {
       const client = sb();
       const [links, zones, states, sos] = await Promise.all([
         client.from('family_links').select('parent_id, created_at'),
-        client.from('safe_zones').select('id, name, lat, lng, radius_m').order('name'),
+        // '*' rather than a column list: works before and after the zone-kind migration
+        client.from('safe_zones').select('*').order('name'),
         client.from('zone_states').select('zone_id, inside, updated_at'),
         client.from('sos_alerts').select('*').in('status', ['active', 'acknowledged']).order('created_at', { ascending: false }).limit(1)
       ]);
@@ -124,7 +126,10 @@ export class ChildApp {
     if (sent && sent !== this.lastSentSeen) {
       this.lastSentSeen = sent;
       for (const ev of this.tracker.lastEvents) {
-        showToast(ev.transition === 'enter' ? 'Arrived' : 'Left a safe place', `${ev.zone_name} — your guardians were told automatically.`, 'info');
+        const restricted = ev.zone_kind === 'restricted';
+        const enter = ev.transition === 'enter';
+        const title = restricted ? (enter ? 'You entered a restricted area' : 'You left a restricted area') : (enter ? 'Arrived' : 'Left a safe place');
+        showToast(title, `${ev.zone_name} — your guardians were told automatically.`, restricted && enter ? 'warning' : 'info');
       }
       if (this.tracker.lastEvents.length) this.load();
     }
@@ -153,8 +158,14 @@ export class ChildApp {
     const name = this.me.display_name;
     const linked = s.guardians.length > 0;
     const guardianNames = s.guardians.map((g) => esc(g.display_name)).join(', ');
-    const insideZone = s.zoneStates.find((z) => z.inside);
-    const zone = insideZone ? s.zones.find((z) => z.id === insideZone.zone_id) : null;
+    const insideZones = s.zoneStates.filter((x) => x.inside).map((x) => s.zones.find((z) => z.id === x.zone_id)).filter(Boolean);
+    const offLimits = insideZones.find(isRestricted) || null;
+    const zone = insideZones.find((z) => !isRestricted(z)) || null;
+    const safeCount = s.zones.filter((z) => !isRestricted(z)).length;
+    const badge = s.openSos ? { tone: 'danger', ic: 'siren', text: 'SOS sent' }
+      : offLimits ? { tone: 'danger', ic: 'ban', text: `Restricted area — ${esc(offLimits.name)}` }
+      : zone ? { tone: 'safe', ic: 'shieldCheck', text: `In safe place — ${esc(zone.name)}` }
+      : { tone: 'offline', ic: 'pin', text: !linked ? 'Not linked yet' : safeCount ? 'Not in a safe place' : 'No safe places set yet' };
 
     if (s.loading) {
       return `
@@ -187,8 +198,7 @@ export class ChildApp {
           <div class="kid-head__text">
             <p class="eyebrow">My safety</p>
             <h1 class="kid-head__title">Hi, ${esc(name)}</h1>
-            <span class="zone-badge tone-${s.openSos ? 'danger' : zone ? 'safe' : 'offline'}">${icon(s.openSos ? 'siren' : zone ? 'shieldCheck' : 'pin', 13)}${
-              s.openSos ? 'SOS sent' : zone ? `In safe place — ${esc(zone.name)}` : !linked ? 'Not linked yet' : s.zones.length ? 'Not in a safe place' : 'No safe places set yet'}</span>
+            <span class="zone-badge tone-${badge.tone}">${icon(badge.ic, 13)}${badge.text}</span>
           </div>
         </header>
 
@@ -205,7 +215,7 @@ export class ChildApp {
         <div class="kid-actions">
           <button class="kid-action tone-neutral" data-action="zones">
             <span class="kid-action__icon">${icon('shield', 22)}</span>
-            <span class="kid-action__label">Safe places</span>
+            <span class="kid-action__label">My places</span>
             <span class="kid-action__hint">${s.zones.length ? `${s.zones.length} set by your guardians` : 'None set yet'}</span>
           </button>
           <a class="kid-action tone-accent" href="tel:112">
@@ -488,16 +498,16 @@ export class ChildApp {
 
   showZones() {
     const zones = this.s.zones;
-    openModal(
-      'Your safe places',
-      zones.length ? `
-        <p class="modal__lede">Your guardians are told automatically when you arrive at or leave these places (while location sharing is on).</p>
+    const group = (list, title, note, kind) => (list.length ? `
+      <section class="place-group">
+        <h3 class="place-group__title">${title}</h3>
+        <p class="place-group__note">${note}</p>
         <div class="choices">
-          ${zones.map((z) => {
+          ${list.map((z) => {
             const st = this.s.zoneStates.find((x) => x.zone_id === z.id);
             return `
               <div class="choice choice--static">
-                <span class="choice__icon choice__icon--safe">${icon('shield', 18)}</span>
+                <span class="choice__icon choice__icon--${kind === 'restricted' ? 'danger' : 'safe'}">${icon(kind === 'restricted' ? 'ban' : 'shieldCheck', 18)}</span>
                 <span class="choice__body">
                   <span class="choice__title">${esc(z.name)}</span>
                   <span class="choice__sub">${z.radius_m} m radius${st ? ` · ${st.inside ? 'you are here' : 'not here'}` : ''}</span>
@@ -506,7 +516,14 @@ export class ChildApp {
             `;
           }).join('')}
         </div>
-      ` : `<div class="empty empty--compact"><span class="empty__icon">${icon('shield', 22)}</span><p>Your guardians haven't added any safe places yet.</p></div>`,
+      </section>` : '');
+    openModal(
+      'Your places',
+      zones.length ? `
+        <p class="modal__lede">Your guardians are told automatically when you arrive at or leave these places (while location sharing is on).</p>
+        ${group(zones.filter((z) => !isRestricted(z)), 'Safe places', 'Where your guardians expect you to be.', 'safe')}
+        ${group(zones.filter(isRestricted), 'Restricted places', 'Places to stay away from. Your guardians are alerted if you go in.', 'restricted')}
+      ` : `<div class="empty empty--compact"><span class="empty__icon">${icon('shield', 22)}</span><p>Your guardians haven't added any places yet.</p></div>`,
       `<button class="btn btn--soft btn--block" onclick="window.closeModal()">Close</button>`,
       { size: 'sm' }
     );

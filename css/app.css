@@ -2565,10 +2565,8 @@ body[data-app="live"] .mode-switch { visibility: hidden; }
 .live-invite { max-width: 560px; margin-bottom: 20px; text-align: center; }
 .live-family-row { flex-wrap: wrap; }
 .live-inline-field { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
-.live-zone-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.live-zone-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .live-zone-list:empty { display: none; }
-.live-zone-tag { cursor: pointer; border: 0; }
-.live-zone-tag:hover { background: var(--accent-soft); color: var(--accent-text); }
 .live-sos-facts { padding: 0; margin-top: 10px; }
 .map-sync.is-off .map-sync__dot { background: var(--offline); animation: none; }
 .leaflet-container.is-picking { cursor: crosshair; }
@@ -2829,3 +2827,172 @@ body[data-app="live"] .mode-switch { visibility: hidden; }
 
 /* Sign-up asked for one account type, but the account already has the other */
 .role-conflict .lede + .lede { margin-top: -10px; }
+
+/* =========================================================
+   Zones: safe and restricted (live mode)
+   Safe = the theme's green, restricted = its red. Colour is never
+   the only signal: icons and labels say which kind a zone is.
+   ========================================================= */
+
+/* Type picker in the zone dialog: two cards, the chosen one takes its colour */
+.kind-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-width: 0; margin: 0 0 4px; padding: 0; border: 0; }
+.kind-opt {
+  --k: var(--safe); --k-soft: var(--safe-soft); --k-text: var(--safe-text);
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 10px;
+  padding: 14px 14px 13px;
+  border-radius: var(--r);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.18s, background-color 0.18s, box-shadow 0.3s var(--ease-out), transform 0.3s var(--ease-spring);
+}
+.kind-opt--restricted { --k: var(--danger); --k-soft: var(--danger-soft); --k-text: var(--danger-text); }
+.kind-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.kind-opt__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-2);
+  color: var(--muted);
+  transition: background-color 0.2s, color 0.2s, transform 0.4s var(--ease-spring);
+}
+.kind-opt__title { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; padding-right: 18px; }
+.kind-opt__sub { grid-column: 1 / -1; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+/* Radio indicator, top right */
+.kind-opt::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-2);
+  background: var(--surface);
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.3s var(--ease-spring);
+}
+.kind-opt:hover { border-color: color-mix(in srgb, var(--k) 40%, var(--line-2)); }
+.kind-opt:active { transform: scale(0.99); }
+.kind-opt:has(input:checked) {
+  border-color: var(--k);
+  background: color-mix(in srgb, var(--k-soft) 65%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--k) 12%, transparent);
+}
+.kind-opt:has(input:checked)::after { border-color: var(--k); background: var(--k); box-shadow: inset 0 0 0 3.5px var(--surface); }
+.kind-opt:has(input:checked) .kind-opt__icon { background: var(--k); color: #fff; transform: scale(1.04); }
+.kind-opt:has(input:checked) .kind-opt__title { color: var(--k-text); }
+.kind-opt:has(input:focus-visible) { outline: 2px solid var(--k); outline-offset: 2px; }
+
+/* Zone chips under the map: a coloured dot, the name, then the size */
+.zone-tag {
+  --k: var(--safe);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px 0 10px;
+  border-radius: 99px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, transform 0.3s var(--ease-spring);
+}
+.zone-tag--restricted { --k: var(--danger); }
+.zone-tag:hover { border-color: color-mix(in srgb, var(--k) 45%, var(--line-2)); background: color-mix(in srgb, var(--k) 6%, var(--surface)); }
+.zone-tag:active { transform: scale(0.97); }
+.zone-tag__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--k); box-shadow: 0 0 0 3px color-mix(in srgb, var(--k) 16%, transparent); }
+.zone-tag__meta { color: var(--muted); font-variant-numeric: tabular-nums; }
+.zone-tag--restricted .zone-tag__meta { color: var(--danger-text); }
+
+/* Where the child is: the place row takes its own tone (a restricted zone reads red even on a quiet card) */
+.place--safe { --tone-soft: var(--safe-soft); --tone-text: var(--safe-text); }
+.place--attention { --tone-soft: var(--attention-soft); --tone-text: var(--attention-text); }
+.place--danger { --tone-soft: var(--danger-soft); --tone-text: var(--danger-text); }
+.place--offline { --tone-soft: var(--bg-2); --tone-text: var(--muted); }
+.place--danger .place__name { color: var(--danger-text); }
+.place-tone--danger { color: var(--danger-text); }
+.place-tone--attention { color: var(--attention-text); }
+
+.zone-tip--restricted { color: var(--danger-text); }
+
+/* Child: "Your places" dialog groups safe and restricted places */
+.place-group + .place-group { margin-top: 22px; }
+.place-group__title { font-size: 13.5px; font-weight: 600; letter-spacing: -0.005em; }
+.place-group__note { font-size: 12.5px; color: var(--muted); margin: 2px 0 10px; }
+.choice__icon--danger { background: var(--danger-soft); color: var(--danger-text); }
+
+@media (max-width: 420px) {
+  .kind-picker { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* =========================================================
+   Refinement layer (live mode): quieter and more spacious.
+   Same palette, type and motion as above; this only removes
+   noise. Scoped to live mode so the demo stays as it was.
+   ========================================================= */
+
+/* Top bar: live is the default, so only demo mode gets a label. The role reads as quiet text. */
+.app-mode-tag--live { display: none; }
+.live-role-tag {
+  --tone-soft: transparent;
+  --tone-text: var(--muted);
+  height: 16px;
+  margin-left: 2px;
+  padding: 0 0 0 12px;
+  border-radius: 0;
+  border-left: 1px solid var(--line-2);
+  font-weight: 500;
+}
+
+/* Status hero: label at the top, headline and actions settle to the bottom of the card */
+body[data-app="live"] .hero__title { margin-top: auto; padding-top: 28px; }
+body[data-app="live"] .hero:not(.hero--danger)::after { opacity: 0.55; }
+
+/* Alerts: one calm surface with hairline rows instead of a stack of separate cards */
+body[data-app="live"] .alert-list {
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+body[data-app="live"] .alert-list > .alert-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 20px 22px;
+}
+body[data-app="live"] .alert-list > .alert-card + .alert-card { border-top: 1px solid var(--line); }
+body[data-app="live"] .alert-list > .alert-card.is-unread {
+  background: color-mix(in srgb, var(--tone-soft) 45%, transparent);
+  box-shadow: inset 3px 0 0 var(--tone);
+}
+body[data-app="live"] .alert-list > .empty { border: 0; box-shadow: none; }
+body[data-app="live"] .alert-card__icon { width: 36px; height: 36px; box-shadow: none; }
+body[data-app="live"] .alert-card { grid-template-columns: 36px minmax(0, 1fr); }
+body[data-app="live"] .alert-card__title { margin-top: 6px; }
+body[data-app="live"] .alert-card__text { color: var(--muted); font-size: 13.5px; margin-top: 4px; }
+/* What kind of alert, as coloured text rather than a filled pill */
+.alert-card__kind { font-size: 12px; font-weight: 600; letter-spacing: 0.01em; color: var(--tone-text, var(--muted)); }
+.alert-card.tone-safe .alert-card__kind,
+.alert-card.tone-attention .alert-card__kind { color: var(--muted); }
+
+/* Child cards: fewer lines, more air */
+body[data-app="live"] .child-card { gap: 16px; padding: 22px; }
+body[data-app="live"] .child-card .place { border-bottom: 0; padding-bottom: 0; }
+
+@media (max-width: 520px) {
+  body[data-app="live"] .alert-list > .alert-card { padding: 16px; }
+  body[data-app="live"] .hero__title { padding-top: 18px; }
+}

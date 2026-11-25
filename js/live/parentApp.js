@@ -12,6 +12,7 @@ import { icon } from '../icons.js';
 import { openModal, closeModal, showToast } from '../app.js';
 import { soundFx } from '../audioNotifier.js';
 import { ProfileTab } from './profileView.js';
+import { ZONE_KINDS, zoneKind, isRestricted, zoneEventView } from './zones.js';
 
 const TABS = [
   { key: 'home', label: 'Home', ic: 'home' },
@@ -22,10 +23,24 @@ const TABS = [
   { key: 'settings', label: 'Settings', ic: 'sliders' }
 ];
 
-/* Status of one child from real data. Never claims "live" without a recent fix. */
+/* "2 safe zones · 1 restricted" */
+export function zoneCountLabel(zones) {
+  const safe = zones.filter((z) => !isRestricted(z)).length;
+  const restricted = zones.length - safe;
+  if (!zones.length) return 'No zones';
+  return [safe ? `${safe} safe zone${safe === 1 ? '' : 's'}` : '', restricted ? `${restricted} restricted` : ''].filter(Boolean).join(' · ');
+}
+
+/* Status of one child from real data. Never claims "live" without a recent fix.
+   inside: safe zones the child is in. restricted: restricted zones the child is in
+   (as of the last evaluated fix, so it stays flagged even if the phone then goes quiet). */
 export function childStatus(child, latest, openSos, zones, states, now = Date.now()) {
   const myZones = zones.filter((z) => z.child_id === child.id);
-  const inside = states.filter((s) => s.child_id === child.id && s.inside).map((s) => myZones.find((z) => z.id === s.zone_id)).filter(Boolean);
+  const safeZones = myZones.filter((z) => !isRestricted(z));
+  const insideAny = states.filter((s) => s.child_id === child.id && s.inside).map((s) => myZones.find((z) => z.id === s.zone_id)).filter(Boolean);
+  const inside = insideAny.filter((z) => !isRestricted(z));
+  // Zone state outlives deleted location history: without a position there's nothing to flag
+  const restricted = latest ? insideAny.filter(isRestricted) : [];
   const age = latest ? now - new Date(latest.recorded_at).getTime() : Infinity;
   const ts = child.tracking_state;
   const tsAfterFix = child.tracking_state_at && (!latest || new Date(child.tracking_state_at) > new Date(latest.received_at));
@@ -40,17 +55,19 @@ export function childStatus(child, latest, openSos, zones, states, now = Date.no
   if (ts === 'unavailable' && tsAfterFix && freshness.key !== 'live') freshness.desc = `${child.display_name}'s device can't get a GPS fix.`;
 
   let place;
-  if (!latest) place = { label: 'Location unknown', name: '—', ic: 'pin' };
-  else if (inside.length) place = { label: 'In a safe zone', name: inside.map((z) => z.name).join(', '), ic: 'shieldCheck' };
-  else if (myZones.length) place = { label: 'Outside safe zones', name: freshness.key === 'live' ? 'Not in any safe zone' : 'At last report', ic: 'pin' };
-  else place = { label: 'No safe zones yet', name: 'Add one from the map', ic: 'shield' };
+  if (!latest) place = { label: 'Location unknown', name: '—', ic: 'pin', tone: 'offline' };
+  else if (restricted.length) place = { label: 'In a restricted zone', name: restricted.map((z) => z.name).join(', '), ic: 'ban', tone: 'danger' };
+  else if (inside.length) place = { label: 'In a safe zone', name: inside.map((z) => z.name).join(', '), ic: 'shieldCheck', tone: 'safe' };
+  else if (safeZones.length) place = { label: 'Outside safe zones', name: freshness.key === 'live' ? 'Not in any safe zone' : 'At last report', ic: 'pin', tone: 'attention' };
+  else if (myZones.length) place = { label: 'Clear of restricted zones', name: freshness.key === 'live' ? 'Not in any restricted zone' : 'At last report', ic: 'shieldCheck', tone: 'safe' };
+  else place = { label: 'No zones yet', name: 'Add one from the map', ic: 'shield', tone: 'offline' };
 
   let tone = freshness.tone;
-  if (openSos) tone = 'danger';
-  else if (freshness.key === 'live' && myZones.length && !inside.length) tone = 'attention';
-  else if (freshness.key === 'live' && !myZones.length) tone = 'info';
+  if (openSos || restricted.length) tone = 'danger';
+  else if (freshness.key === 'live' && safeZones.length && !inside.length) tone = 'attention';
+  else if (freshness.key === 'live' && !safeZones.length) tone = myZones.length ? 'safe' : 'info';
 
-  return { freshness, place, tone, inside, sos: openSos };
+  return { freshness, place, tone, inside, restricted, sos: openSos };
 }
 
 export class ParentApp {
@@ -117,7 +134,7 @@ export class ParentApp {
               <button class="rail-btn" data-action="zoom-out" aria-label="Zoom out" title="Zoom out">${icon('minus', 18)}</button>
               <span class="rail-sep"></span>
               <button class="rail-btn" data-action="fit" aria-label="Fit everyone in view" title="Fit everyone in view">${icon('expand', 18)}</button>
-              <button class="rail-btn rail-btn--accent" data-action="add-zone" aria-label="Add safe zone" title="Add safe zone">${icon('shield', 18)}</button>
+              <button class="rail-btn rail-btn--accent" data-action="add-zone" aria-label="Add a zone" title="Add a safe or restricted zone">${icon('shield', 18)}</button>
             </div>
             <div class="map-sheet glass" data-region="sheet"></div>
           </div>
@@ -237,7 +254,8 @@ export class ParentApp {
       if (!this.knownEvents.has(ev.id)) {
         this.knownEvents.add(ev.id);
         if (!this.firstLoad) {
-          showToast('Safe zone', `${name(ev.child_id)} ${ev.transition === 'enter' ? 'arrived at' : 'left'} ${ev.zone_name}.`, ev.transition === 'enter' ? 'safe' : 'warning');
+          const v = zoneEventView(ev);
+          showToast(v.toastTitle, `${name(ev.child_id)} ${v.verb} ${ev.zone_name}.`, v.toast);
         }
       }
     }
@@ -364,6 +382,7 @@ export class ParentApp {
 
     const statuses = s.children.map((c) => ({ c, st: this.statusOf(c) }));
     const sosChild = statuses.find((x) => x.st.sos);
+    const inRestricted = statuses.find((x) => x.st.restricted.length);
     const problem = statuses.find((x) => ['offline', 'denied', 'paused', 'none', 'stale'].includes(x.st.freshness.key));
     const outside = statuses.find((x) => x.st.tone === 'attention' && x.st.freshness.key === 'live');
 
@@ -375,6 +394,13 @@ export class ParentApp {
         `${a.status === 'active' ? `<button class="btn btn--ink" data-action="ack" data-id="${a.id}">Acknowledge</button>` : ''}
          <button class="btn btn--glass" data-action="locate" data-id="${a.child_id}">${icon('map', 15)} View on map</button>
          <a class="btn btn--glass" href="tel:112">${icon('phone', 15)} Call 112</a>`);
+    } else if (inRestricted) {
+      const { c, st } = inRestricted;
+      const entered = s.events.find((e) => e.child_id === c.id && e.transition === 'enter' && st.restricted.some((z) => z.id === e.zone_id));
+      hero = this.hero('danger', 'ban', 'Automatic · restricted zone', entered ? ago(entered.occurred_at) : st.freshness.label,
+        `${esc(c.display_name)} is in a restricted zone`,
+        `${esc(st.place.name)}. ${esc(st.freshness.key === 'live' ? `Live position from ${ago(s.latest[c.id].recorded_at)}.` : st.freshness.desc)}`,
+        `<button class="btn btn--ink" data-action="locate" data-id="${c.id}">${icon('map', 15)} View on map</button>`);
     } else if (problem || outside) {
       const x = problem || outside;
       hero = this.hero('attention', 'alert', problem ? 'Location' : 'Automatic · safe zones', x.st.freshness.label,
@@ -401,8 +427,8 @@ export class ParentApp {
             ${feed.length ? `<ol class="feed">${feed.map((item) => `
               <li class="feed__item" data-tab="alerts">
                 <span class="feed__icon tone-${item.tone}">${icon(item.ic, 15)}</span>
-                <div class="feed__body"><div class="feed__title">${item.title}</div><div class="feed__meta">${item.kindLabel} · ${ago(item.at)}</div></div>
-              </li>`).join('')}</ol>` : `<p class="empty-inline">No zone events or SOS alerts yet.</p>`}
+                <div class="feed__body"><div class="feed__title">${item.title}</div><div class="feed__meta">${item.short} · ${ago(item.at)}</div></div>
+              </li>`).join('')}</ol>` : `<p class="empty-inline">Zone events and SOS alerts will appear here.</p>`}
           </section>
         </aside>
       </div>
@@ -440,7 +466,7 @@ export class ParentApp {
           <div class="child-card__id"><h3>${esc(c.display_name)}</h3><p>${st.sos ? 'SOS active' : esc(st.freshness.desc)}</p></div>
           <span class="pill pill--${st.freshness.tone}"><i class="dot"></i>${st.freshness.label}</span>
         </header>
-        <div class="place">
+        <div class="place place--${st.place.tone}">
           <span class="place__icon">${icon(st.place.ic, 17)}</span>
           <div class="place__text"><span class="place__label">${st.place.label}</span><span class="place__name">${esc(st.place.name)}</span></div>
         </div>
@@ -451,7 +477,7 @@ export class ParentApp {
         </dl>
         <footer class="child-card__actions">
           <button class="btn btn--primary btn--sm btn--grow" data-action="locate" data-id="${c.id}" ${loc ? '' : 'disabled'}>${icon('map', 15)} Live map</button>
-          <button class="btn btn--soft btn--sm" data-action="add-zone" data-id="${c.id}">${icon('shield', 15)} Safe zone</button>
+          <button class="btn btn--soft btn--sm" data-action="add-zone" data-id="${c.id}">${icon('plus', 15)} Zone</button>
         </footer>
       </article>
     `;
@@ -461,25 +487,25 @@ export class ParentApp {
   timeline() {
     const name = (id) => esc((this.childById(id) || {}).display_name || 'Child');
     const sos = this.s.sos.map((a) => ({
-      kind: 'sos', kindLabel: 'SOS · sent by child', at: a.created_at, tone: 'danger', ic: 'siren',
+      kind: 'sos', kindLabel: 'SOS · sent by child', short: 'SOS from child', at: a.created_at, tone: 'danger', ic: 'siren',
       title: `${name(a.child_id)} pressed SOS`, item: a
     }));
-    const evs = this.s.events.map((e) => ({
-      kind: 'zone', kindLabel: 'Automatic · safe zone', at: e.occurred_at, tone: e.transition === 'enter' ? 'safe' : 'attention', ic: e.transition === 'enter' ? 'checkCircle' : 'pin',
-      title: `${name(e.child_id)} ${e.transition === 'enter' ? 'arrived at' : 'left'} ${esc(e.zone_name)}`, item: e
-    }));
+    const evs = this.s.events.map((e) => {
+      const v = zoneEventView(e);
+      return { kind: 'zone', kindLabel: v.kindLabel, short: v.short, at: e.occurred_at, tone: v.tone, ic: v.ic, title: `${name(e.child_id)} ${v.verb} ${esc(e.zone_name)}`, item: e };
+    });
     return [...sos, ...evs].sort((a, b) => new Date(b.at) - new Date(a.at));
   }
 
   render_alerts() {
     const s = this.s;
-    const head = this.pageHead('Activity', 'Alerts', 'SOS alerts are sent by your child. Safe-zone events are detected automatically from location updates.');
+    const head = this.pageHead('Activity', 'Alerts', 'SOS alerts are sent by your child. Zone events are detected automatically from location updates.');
     if (s.loading) return head + this.loadingBlock();
     const all = this.timeline();
     const filters = [
       { key: 'all', label: 'All' },
-      { key: 'sos', label: 'SOS (sent by child)' },
-      { key: 'zone', label: 'Safe-zone events (automatic)' }
+      { key: 'sos', label: 'SOS' },
+      { key: 'zone', label: 'Zone events' }
     ];
     const list = all.filter((x) => s.filter === 'all' || x.kind === s.filter);
     return head + `
@@ -491,7 +517,7 @@ export class ParentApp {
           <div class="empty">
             <span class="empty__icon">${icon('shieldCheck', 26)}</span>
             <h3>Nothing here yet</h3>
-            <p>${s.children.length ? 'SOS alerts and safe-zone arrivals and departures will appear here.' : 'Link a child to start receiving alerts.'}</p>
+            <p>${s.children.length ? 'SOS alerts and zone arrivals and departures will appear here.' : 'Link a child to start receiving alerts.'}</p>
           </div>`}
       </div>
     `;
@@ -523,7 +549,7 @@ export class ParentApp {
         <span class="alert-card__icon">${icon('siren', 18)}</span>
         <div class="alert-card__body">
           <div class="alert-card__meta">
-            <span class="pill pill--danger">SOS · sent by child</span>${statusPill}
+            <span class="alert-card__kind">SOS · sent by child</span>${statusPill}
             <time datetime="${a.created_at}">${ago(a.created_at)} · ${fullTime(a.created_at)}</time>
           </div>
           <h3 class="alert-card__title">${name} pressed SOS</h3>
@@ -548,16 +574,16 @@ export class ParentApp {
 
   zoneCard(e) {
     const child = this.childById(e.child_id);
-    const enter = e.transition === 'enter';
+    const v = zoneEventView(e);
     return `
-      <article class="alert-card tone-${enter ? 'safe' : 'attention'}">
-        <span class="alert-card__icon">${icon(enter ? 'checkCircle' : 'pin', 18)}</span>
+      <article class="alert-card tone-${v.tone}">
+        <span class="alert-card__icon">${icon(v.ic, 18)}</span>
         <div class="alert-card__body">
           <div class="alert-card__meta">
-            <span class="pill pill--info">Automatic · safe zone</span>
+            <span class="alert-card__kind">${v.kindLabel}</span>
             <time datetime="${e.occurred_at}">${ago(e.occurred_at)} · ${fullTime(e.occurred_at)}</time>
           </div>
-          <h3 class="alert-card__title">${esc(child ? child.display_name : 'Child')} ${enter ? 'arrived at' : 'left'} ${esc(e.zone_name)}</h3>
+          <h3 class="alert-card__title">${esc(child ? child.display_name : 'Child')} ${v.verb} ${esc(e.zone_name)}</h3>
           <p class="alert-card__text">Detected from a location fix accurate to ±${Math.round(e.accuracy_m)} m, ${Math.round(e.distance_m)} m from the zone centre.</p>
         </div>
       </article>
@@ -600,7 +626,7 @@ export class ParentApp {
             ${avatarHtml(c.display_name, 'sm')}
             <div class="row__body">
               <div class="row__title">${esc(c.display_name)} ${c.public_id ? `<span class="mono live-public-id">${esc(c.public_id)}</span>` : ''}</div>
-              <div class="row__sub">Linked ${new Date(c.linked_at).toLocaleDateString()} · ${this.s.zones.filter((z) => z.child_id === c.id).length} safe zones</div>
+              <div class="row__sub">Linked ${new Date(c.linked_at).toLocaleDateString()} · ${zoneCountLabel(this.s.zones.filter((z) => z.child_id === c.id))}</div>
             </div>
             <label class="live-inline-field">
               <span>Keep history</span>
@@ -655,7 +681,7 @@ export class ParentApp {
           <section class="group">
             <h3 class="group__title">${icon('shieldCheck', 15)} Privacy & data</h3>
             <div class="card card--flush">
-              <div class="row"><div class="row__body"><div class="row__title">What is stored</div><div class="row__sub">Location fixes (position, accuracy, battery, time) for each child's retention period — set per child under Family. SOS records keep the location that was attached. Safe-zone events keep the zone name and distance.</div></div></div>
+              <div class="row"><div class="row__body"><div class="row__title">What is stored</div><div class="row__sub">Location fixes (position, accuracy, battery, time) for each child's retention period — set per child under Family. SOS records keep the location that was attached. Zone events keep the zone's name and type, and the distance.</div></div></div>
               <div class="row"><div class="row__body"><div class="row__title">Who can see it</div><div class="row__sub">Only linked guardians and the child, enforced by database row-level security.</div></div></div>
             </div>
           </section>
@@ -731,18 +757,21 @@ export class ParentApp {
         ${avatarHtml(child.display_name, 'md', st.tone)}
         <div class="map-sheet__id">
           <div class="map-sheet__name">${esc(child.display_name)} <span class="pill pill--${st.freshness.tone}"><i class="dot"></i>${st.freshness.label}</span></div>
-          <div class="map-sheet__place">${icon(st.place.ic, 14)}<span>${esc(st.place.label)}${st.inside.length ? ` · ${esc(st.place.name)}` : ''}</span></div>
+          <div class="map-sheet__place place-tone--${st.place.tone}">${icon(st.place.ic, 14)}<span>${esc(st.place.label)}${st.inside.length || st.restricted.length ? ` · ${esc(st.place.name)}` : ''}</span></div>
           <div class="map-sheet__meta">
             ${loc ? `<span>${icon('clock', 13)} Position ${fullTime(loc.recorded_at)}</span><span>±${Math.round(loc.accuracy_m)} m</span>${loc.battery_pct != null ? `<span>${loc.battery_pct}% battery</span>` : ''}` : `<span>${esc(st.freshness.desc)}</span>`}
           </div>
         </div>
       </div>
       <div class="live-zone-list">
-        ${zones.map((z) => `<button class="tag live-zone-tag" data-action="edit-zone" data-id="${z.id}">${icon('shield', 12)} ${esc(z.name)} · ${z.radius_m} m</button>`).join('')}
+        ${zones.map((z) => {
+          const k = zoneKind(z);
+          return `<button class="zone-tag zone-tag--${k.key}" data-action="edit-zone" data-id="${z.id}" title="Edit ${esc(k.label.toLowerCase())}"><i class="zone-tag__dot" aria-hidden="true"></i><span class="zone-tag__name">${esc(z.name)}</span><span class="zone-tag__meta">${k.key === 'restricted' ? 'Restricted · ' : ''}${z.radius_m} m</span></button>`;
+        }).join('')}
       </div>
       <div class="map-sheet__actions">
         <button class="btn btn--primary btn--sm" data-action="center" ${loc ? '' : 'disabled'}>${icon('locate', 15)} Center on ${esc(child.display_name)}</button>
-        <button class="btn btn--soft btn--sm" data-action="add-zone" data-id="${child.id}">${icon('plus', 15)} Safe zone</button>
+        <button class="btn btn--soft btn--sm" data-action="add-zone" data-id="${child.id}">${icon('plus', 15)} Add zone</button>
       </div>
     `;
   }
@@ -974,33 +1003,44 @@ export class ParentApp {
     });
   }
 
-  /* ---------------- safe zone create / edit ---------------- */
+  /* ---------------- zone create / edit (safe or restricted) ---------------- */
 
   openZoneModal(zone, childId = null, draft = null) {
     const s = this.s;
     const cid = zone ? zone.child_id : childId;
     const child = this.childById(cid);
     if (!child) {
-      showToast('Link a child first', 'Safe zones belong to a linked child.', 'info');
+      showToast('Link a child first', 'Zones belong to a linked child.', 'info');
       return;
     }
     const loc = s.latest[cid];
     const center = this.map.center();
     const v = draft || {
+      kind: zoneKind(zone).key,
       name: zone ? zone.name : '',
       radius: zone ? zone.radius_m : 150,
       lat: zone ? zone.lat : loc ? loc.lat : center ? center.lat : '',
       lng: zone ? zone.lng : loc ? loc.lng : center ? center.lng : ''
     };
     const fmt = (n) => (n === '' || n == null ? '' : Number(n).toFixed(6));
+    const placeholder = (k) => (k === 'restricted' ? 'e.g. Highway, River bank' : 'e.g. Home, School');
 
     openModal(
-      zone ? 'Edit safe zone' : `New safe zone for ${esc(child.display_name)}`,
+      zone ? `Edit ${esc(zone.name)}` : `New zone for ${esc(child.display_name)}`,
       `
-        <p class="modal__lede">You're alerted automatically when ${esc(child.display_name)} enters or leaves this area.</p>
         <form class="form" id="zone-form" novalidate>
+          <fieldset class="kind-picker">
+            <legend class="sr-only">Zone type</legend>
+            ${Object.values(ZONE_KINDS).map((k) => `
+              <label class="kind-opt kind-opt--${k.key}">
+                <input type="radio" name="kind" value="${k.key}" ${v.kind === k.key ? 'checked' : ''} />
+                <span class="kind-opt__icon">${icon(k.ic, 18)}</span>
+                <span class="kind-opt__title">${k.label}</span>
+                <span class="kind-opt__sub">${k.pick}</span>
+              </label>`).join('')}
+          </fieldset>
           <label class="field"><span class="field__label">Name</span>
-            <input class="input" name="name" maxlength="80" required value="${esc(v.name)}" placeholder="e.g. Home, School" /></label>
+            <input class="input" name="name" maxlength="80" required value="${esc(v.name)}" placeholder="${placeholder(v.kind)}" /></label>
           <label class="field"><span class="field__label">Radius <output class="field__value" id="zone-radius-out">${v.radius} m</output></span>
             <input class="range" name="radius" type="range" min="25" max="2000" step="25" value="${v.radius}" /></label>
           <div class="field"><span class="field__label">Centre</span>
@@ -1029,8 +1069,11 @@ export class ParentApp {
     const err = o.querySelector('#zone-error');
     const read = () => {
       const fd = new FormData(form);
-      return { name: String(fd.get('name') || '').trim(), radius: Number(fd.get('radius')), lat: fd.get('lat'), lng: fd.get('lng') };
+      return { kind: fd.get('kind') === 'restricted' ? 'restricted' : 'safe', name: String(fd.get('name') || '').trim(), radius: Number(fd.get('radius')), lat: fd.get('lat'), lng: fd.get('lng') };
     };
+    form.addEventListener('change', (e) => {
+      if (e.target.name === 'kind') form.querySelector('input[name="name"]').placeholder = placeholder(e.target.value);
+    });
     form.radius.addEventListener('input', () => { o.querySelector('#zone-radius-out').textContent = `${form.radius.value} m`; });
     o.querySelector('[data-zone="cancel"]').addEventListener('click', closeModal);
     o.querySelector('[data-zone="here"]').addEventListener('click', () => {
@@ -1045,7 +1088,7 @@ export class ParentApp {
     if (zone) {
       o.querySelector('[data-zone="delete"]').addEventListener('click', () => {
         closeModal();
-        this.confirm(`Delete "${esc(zone.name)}"?`, 'You will stop receiving entry and exit alerts for it. Past events stay in the alert history.', 'Delete zone', async () => {
+        this.confirm(`Delete "${esc(zone.name)}"?`, `This ${zoneKind(zone).label.toLowerCase()} stops sending entry and exit alerts. Past events stay in the alert history.`, 'Delete zone', async () => {
           const { data, error } = await sb().from('safe_zones').delete().eq('id', zone.id).select('id');
           if (error) throw error;
           if (!data.length) throw new Error('forbidden');
@@ -1072,18 +1115,25 @@ export class ParentApp {
       }
       ev.target.disabled = true;
       const row = { name: d.name, radius_m: Math.round(d.radius), lat, lng };
+      // Only send the kind when the database has the column (zones carry it once
+      // 20261125000000_zone_kinds.sql is applied) or a restricted zone is asked for,
+      // so safe zones keep working on a database that hasn't been migrated yet
+      if (d.kind === 'restricted' || (zone && 'kind' in zone)) row.kind = d.kind;
       const q = zone
         ? sb().from('safe_zones').update(row).eq('id', zone.id).select()
         : sb().from('safe_zones').insert({ ...row, child_id: cid }).select();
       const { data, error } = await q;
       if (error || !data || !data.length) {
-        err.textContent = friendlyError(error || 'forbidden');
+        err.textContent = error && /\bkind\b/.test(error.message || '')
+          ? 'Restricted zones need a database update first: apply supabase/migrations/20261125000000_zone_kinds.sql.'
+          : friendlyError(error || 'forbidden');
         err.hidden = false;
         ev.target.disabled = false;
         return;
       }
       closeModal();
-      showToast(zone ? 'Zone updated' : 'Safe zone created', `${d.name} · ${Math.round(d.radius)} m. Alerts start from ${esc(child.display_name)}'s next location update.`, 'safe');
+      const k = ZONE_KINDS[d.kind];
+      showToast(zone ? 'Zone updated' : `${k.label} created`, `${d.name} · ${Math.round(d.radius)} m. Alerts start from ${child.display_name}'s next location update.`, d.kind === 'restricted' ? 'info' : 'safe');
       await this.load();
       this.map.focus(lat, lng, 15);
     });
@@ -1098,7 +1148,7 @@ export class ParentApp {
     banner.className = 'map-banner glass tone-info';
     banner.innerHTML = `<span class="map-banner__icon">${icon('pin', 16)}</span><div class="map-banner__text"><strong>Click the map to place the zone centre</strong><span>Then adjust the details.</span></div><button class="btn btn--sm btn--ink" data-action="cancel-pick">Cancel</button>`;
     this.map.startPicking((lat, lng) => {
-      this.map.showPick(lat, lng, draft.radius);
+      this.map.showPick(lat, lng, draft.radius, draft.kind);
       this.picking.draft = { ...draft, lat, lng };
       this.endPick();
     });

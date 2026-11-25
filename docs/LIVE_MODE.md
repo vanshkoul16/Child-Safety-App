@@ -36,6 +36,8 @@ SOS (tap + confirm) ───────RPC──▶  raise_sos()  snapshot of 
 - **Enter** when the distance to the centre is ≤ radius. **Exit** only when the distance is > radius + buffer, where buffer = accuracy clamped to 20–100 m. This hysteresis stops jitter at the boundary from producing duplicate alerts.
 - The previous inside/outside state is kept per child and zone (`zone_states`). An event is written only when that state changes.
 - The first evaluation of a new or edited zone records its state silently (no "arrived" event just because you drew a zone around the child).
+- Every zone has a **kind** (`safe_zones.kind`, added in `20261125000000_zone_kinds.sql`): `safe` (home, school: arriving is good news, leaving is worth a look) or `restricted` (a busy road, a river bank: entering is the alert, leaving is the all-clear). The rules above are the same for both. Each zone event keeps a snapshot of the kind (`zone_events.zone_kind`), so history reads correctly after a zone is deleted. Zones created before the migration are safe zones.
+- A child who is inside a restricted zone (as of the last evaluated fix) shows as red on the guardian's home screen, child card and map, ahead of every other state except an active SOS. Restricted-zone alerts are in-app (toast and sound while SafeHaven is open); push notifications are still SOS-only.
 
 ### SOS delivery states
 
@@ -145,7 +147,7 @@ The static server only serves `index.html`, `manifest.json`, `sw.js`, `LICENSE` 
 - [x] Child location sharing with explicit start, visible indicator, pause, and honest *denied / unavailable / not linked* states reported to guardians — *browser*
 - [x] Location validation (ranges, timestamp window), 5-second server rate limit, client throttling, offline retry — *integration*
 - [x] Guardian live map (Leaflet + OSM) with accuracy circle, position time, live/stale/offline status, realtime updates — *browser*
-- [x] Safe zones create/edit/delete with validation and pick-on-map; enter/exit events with hysteresis, accuracy gating and dedupe — *integration + browser*
+- [x] Safe and restricted zones: create/edit/delete with validation and pick-on-map; enter/exit events with hysteresis, accuracy gating and dedupe; the zone kind on every event — *integration + browser*
 - [x] SOS with confirmation dialog and keyboard-accessible cancel, idempotent while open, latest-location snapshot, child cancel, guardian acknowledge/resolve — *integration + browser*
 - [x] SOS Web Push to every guardian device; delivery reported only after the device receipt; expired subscriptions cleaned up — *integration (mock push service)*
 - [x] Alert history that separates *SOS · sent by child* from *Automatic · safe zone* events — *browser*
@@ -160,7 +162,7 @@ The static server only serves `index.html`, `manifest.json`, `sw.js`, `LICENSE` 
 - **Real browser push has not been tested end-to-end.** The server path was verified against a mock push service with real encryption, but the embedded browser blocks notifications.
 - If the child's phone saves the SOS but cannot reach `/api/live/sos-notify` (e.g. it goes offline at that moment), the SOS is stored and appears on open guardian dashboards, but no push is sent. A Supabase Database Webhook calling the notify endpoint would make this independent of the child's connection.
 - The API rate limiter in `server/liveApi.js` is in-memory (per process). Use a shared store (e.g. Redis) when running more than one instance. Database-level limits (locations, SOS, invites) are already shared.
-- **Not yet in live mode** (still demo-only): route corridors and deviation, turn-by-turn directions, "I'm safe" check-ins, SMS to contacts, SOS audio/video recording, fall detection, safe-zone schedules and restricted / warning zones, location trail history, guardian-raised SOS.
+- **Not yet in live mode** (still demo-only): route corridors and deviation, turn-by-turn directions, "I'm safe" check-ins, SMS to contacts, SOS audio/video recording, fall detection, zone schedules, location trail history, guardian-raised SOS.
 - Child accounts use their own Google account or email and password. Very young children may need a guardian-managed sign-in flow.
 
 ### Needs your credentials or a real device

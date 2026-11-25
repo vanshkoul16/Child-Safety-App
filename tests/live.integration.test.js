@@ -233,6 +233,45 @@ test('geofencing emits one event per real transition and ignores GPS noise', asy
   assert.ok(direct.error, 'zone events cannot be forged');
 });
 
+test('restricted zones: the kind is validated and guarded, and events carry it', async () => {
+  const bad = await parentA.client.from('safe_zones').insert({ child_id: childC.user.id, name: 'X', lat: HOME.lat, lng: HOME.lng, radius_m: 100, kind: 'warning' });
+  assert.ok(bad.error, 'kind must be safe or restricted');
+
+  // Far from HOME, so these fixes never touch the safe zone from the earlier tests
+  const RIVER = north(HOME.lat, HOME.lng, 3000);
+  const created = await parentA.client.from('safe_zones')
+    .insert({ child_id: childC.user.id, name: 'River bank', lat: RIVER.lat, lng: RIVER.lng, radius_m: 100, kind: 'restricted' })
+    .select().single();
+  assert.ifError(created.error);
+  assert.equal(created.data.kind, 'restricted');
+
+  const strangerEdit = await parentB.client.from('safe_zones').update({ kind: 'safe' }).eq('id', created.data.id).select();
+  assert.equal(strangerEdit.data.length, 0, 'unlinked parent cannot change the kind');
+  const childEdit = await childC.client.from('safe_zones').update({ kind: 'safe' }).eq('id', created.data.id).select();
+  assert.ok(childEdit.error || childEdit.data.length === 0, 'child cannot turn a restricted zone into a safe one');
+
+  const childView = await childC.client.from('safe_zones').select('name, kind').eq('id', created.data.id).single();
+  assert.deepEqual(childView.data, { name: 'River bank', kind: 'restricted' }, 'the child can see their restricted zones');
+
+  let r = await sendFix(childC, north(RIVER.lat, RIVER.lng, 600));
+  assert.deepEqual(r.data.events, [], 'first evaluation is silent');
+
+  r = await sendFix(childC, north(RIVER.lat, RIVER.lng, 20));
+  assert.deepEqual(r.data.events.map((e) => [e.zone_name, e.zone_kind, e.transition]), [['River bank', 'restricted', 'enter']]);
+
+  r = await sendFix(childC, north(RIVER.lat, RIVER.lng, 600));
+  assert.deepEqual(r.data.events.map((e) => [e.zone_kind, e.transition]), [['restricted', 'exit']]);
+
+  const events = await parentA.client.from('zone_events').select('zone_kind, transition').eq('zone_id', created.data.id).order('occurred_at');
+  assert.deepEqual(events.data, [{ zone_kind: 'restricted', transition: 'enter' }, { zone_kind: 'restricted', transition: 'exit' }]);
+
+  const others = await parentA.client.from('zone_events').select('zone_kind').eq('child_id', childC.user.id).neq('zone_id', created.data.id);
+  assert.ok(others.data.length && others.data.every((e) => e.zone_kind === 'safe'), 'zones created without a kind are safe zones');
+
+  const removed = await parentA.client.from('safe_zones').delete().eq('id', created.data.id).select('id');
+  assert.equal(removed.data.length, 1);
+});
+
 test('SOS is authenticated, idempotent, snapshot-located and family-private', async () => {
   const unlinked = await rpc(childD, 'raise_sos', {});
   assert.deepEqual(unlinked.data, { ok: false, error: 'not_linked' });

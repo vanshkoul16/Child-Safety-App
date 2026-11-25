@@ -3,6 +3,7 @@
    ========================================================= */
 
 import { config, esc, initials, ago } from './api.js';
+import { ZONE_KINDS, zoneKind } from './zones.js';
 
 const TONE_HEX = { safe: '#1f8a5b', attention: '#c47a10', danger: '#d6453d', offline: '#7a7f87', info: '#2f6fdb' };
 
@@ -62,21 +63,25 @@ export class LiveMap {
     }
   }
 
+  // Safe zones: soft green, dashed. Restricted zones: red, solid edge, a touch more fill.
   setZones(zones, onSelect) {
     if (!this.map) return;
     const seen = new Set();
     for (const z of zones) {
       seen.add(z.id);
-      const style = { color: '#1f8a5b', weight: 1.5, dashArray: '5 5', fillOpacity: 0.08 };
+      const k = zoneKind(z);
+      const style = k.key === 'restricted'
+        ? { color: k.color, weight: 1.75, dashArray: null, fillColor: k.color, fillOpacity: 0.12 }
+        : { color: k.color, weight: 1.5, dashArray: '5 5', fillColor: k.color, fillOpacity: 0.07 };
       let layer = this.zoneLayers[z.id];
       if (!layer) {
         layer = L.circle([z.lat, z.lng], { radius: z.radius_m, ...style }).addTo(this.map);
         layer.on('click', () => onSelect && onSelect(z.id));
         this.zoneLayers[z.id] = layer;
       } else {
-        layer.setLatLng([z.lat, z.lng]).setRadius(z.radius_m);
+        layer.setLatLng([z.lat, z.lng]).setRadius(z.radius_m).setStyle(style);
       }
-      layer.unbindTooltip().bindTooltip(`${esc(z.name)} · ${z.radius_m} m`, { direction: 'top' });
+      layer.unbindTooltip().bindTooltip(`${esc(z.name)} · ${k.key === 'restricted' ? 'Restricted · ' : ''}${z.radius_m} m`, { direction: 'top', className: `zone-tip zone-tip--${k.key}` });
     }
     for (const id of Object.keys(this.zoneLayers)) {
       if (!seen.has(id)) {
@@ -119,12 +124,13 @@ export class LiveMap {
     }
   }
 
-  showPick(lat, lng, radius) {
+  showPick(lat, lng, radius, kind = 'safe') {
     if (!this.map) return;
+    const color = ZONE_KINDS[kind === 'restricted' ? 'restricted' : 'safe'].color;
     if (!this.pickMarker) {
-      this.pickMarker = L.circle([lat, lng], { radius, color: '#2f6fdb', weight: 2, fillOpacity: 0.12 }).addTo(this.map);
+      this.pickMarker = L.circle([lat, lng], { radius, color, weight: 2, fillOpacity: 0.12 }).addTo(this.map);
     } else {
-      this.pickMarker.setLatLng([lat, lng]).setRadius(radius);
+      this.pickMarker.setLatLng([lat, lng]).setRadius(radius).setStyle({ color });
     }
   }
 }
