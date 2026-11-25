@@ -146,7 +146,7 @@ The static server only serves `index.html`, `manifest.json`, `sw.js`, `LICENSE` 
 - [x] RLS on every table; cross-family access blocked for reads and writes; anonymous access blocked — *integration + browser*
 - [x] Child location sharing with explicit start, visible indicator, pause, and honest *denied / unavailable / not linked* states reported to guardians — *browser*
 - [x] Location validation (ranges, timestamp window), 5-second server rate limit, client throttling, offline retry — *integration*
-- [x] Guardian live map (Leaflet + OSM) with accuracy circle, position time, live/stale/offline status, realtime updates — *browser*
+- [x] Guardian live map (Leaflet + OSM, with a Map / Satellite switch: Esri World Imagery and place names by default, configurable via `MAP_SATELLITE_*`) with accuracy circle, position time, live/stale/offline status, realtime updates — *browser*
 - [x] Safe and restricted zones: create/edit/delete with validation and pick-on-map; enter/exit events with hysteresis, accuracy gating and dedupe; the zone kind on every event — *integration + browser*
 - [x] SOS with confirmation dialog and keyboard-accessible cancel, idempotent while open, latest-location snapshot, child cancel, guardian acknowledge/resolve — *integration + browser*
 - [x] SOS Web Push to every guardian device; delivery reported only after the device receipt; expired subscriptions cleaned up — *integration (mock push service)*

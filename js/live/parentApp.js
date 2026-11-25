@@ -126,7 +126,12 @@ export class ParentApp {
         <section class="screen screen--map" data-screen="map">
           <div class="map-shell">
             <div id="leaflet-map" aria-label="Map of your children's latest locations"></div>
-            <div class="map-top"><div class="map-chips glass" data-region="chips"></div></div>
+            <div class="map-top">
+              <div class="map-chips glass" data-region="chips"></div>
+              <div class="seg glass map-layers" role="group" aria-label="Map view">
+                ${['map', 'satellite'].map((b) => `<button class="seg__btn ${this.map.base === b ? 'active' : ''}" data-action="base" data-id="${b}" aria-pressed="${this.map.base === b}">${b === 'map' ? 'Map' : 'Satellite'}</button>`).join('')}
+              </div>
+            </div>
             <div class="map-banner glass" data-region="pick-banner" hidden></div>
             <div class="map-sync glass" aria-live="off"><i class="map-sync__dot"></i><span data-region="sync">Loading…</span></div>
             <div class="map-rail glass" role="toolbar" aria-label="Map controls">
@@ -855,6 +860,13 @@ export class ParentApp {
       }
       case 'select': this.s.selected = id; this.render(); this.centerSelected(); break;
       case 'center': this.centerSelected(); break;
+      case 'base':
+        this.map.setBase(id);
+        this.root.querySelectorAll('[data-action="base"]').forEach((b) => {
+          b.classList.toggle('active', b.dataset.id === this.map.base);
+          b.setAttribute('aria-pressed', String(b.dataset.id === this.map.base));
+        });
+        break;
       case 'zoom-in': this.map.zoomBy(1); break;
       case 'zoom-out': this.map.zoomBy(-1); break;
       case 'fit': {

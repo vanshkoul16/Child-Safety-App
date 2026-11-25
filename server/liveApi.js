@@ -130,7 +130,11 @@ function appConfigScript() {
     supabaseAnonKey: supabaseReady ? SUPABASE_ANON_KEY : '',
     vapidPublicKey: pushReady ? VAPID_PUBLIC_KEY : '',
     mapTileUrl: env.MAP_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    mapTileAttribution: env.MAP_TILE_ATTRIBUTION || '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    mapTileAttribution: env.MAP_TILE_ATTRIBUTION || '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    // Satellite view (optional overrides; the browser has Esri World Imagery defaults)
+    satelliteTileUrl: env.MAP_SATELLITE_TILE_URL || '',
+    satelliteLabelsUrl: env.MAP_SATELLITE_LABELS_URL || '',
+    satelliteAttribution: env.MAP_SATELLITE_ATTRIBUTION || ''
   };
   return `window.SAFEHAVEN_CONFIG = Object.freeze(${JSON.stringify(cfg)});\n`;
 }

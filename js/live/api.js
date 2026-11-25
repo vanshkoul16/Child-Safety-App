@@ -9,7 +9,11 @@ export const config = {
   supabaseAnonKey: cfg.supabaseAnonKey || '',
   vapidPublicKey: cfg.vapidPublicKey || '',
   mapTileUrl: cfg.mapTileUrl || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  mapTileAttribution: cfg.mapTileAttribution || '&copy; OpenStreetMap contributors'
+  mapTileAttribution: cfg.mapTileAttribution || '&copy; OpenStreetMap contributors',
+  // Satellite view: Esri World Imagery plus a place-name overlay, unless the server sets others
+  satelliteTileUrl: cfg.satelliteTileUrl || 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  satelliteLabelsUrl: cfg.satelliteLabelsUrl || 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  satelliteAttribution: cfg.satelliteAttribution || 'Imagery &copy; Esri, Maxar, Earthstar Geographics and the GIS User Community'
 };
 
 export const isLiveConfigured = () => Boolean(config.supabaseUrl && config.supabaseAnonKey && window.supabase);

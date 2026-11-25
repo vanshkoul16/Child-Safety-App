@@ -7,11 +7,30 @@ import { ZONE_KINDS, zoneKind } from './zones.js';
 
 const TONE_HEX = { safe: '#1f8a5b', attention: '#c47a10', danger: '#d6453d', offline: '#7a7f87', info: '#2f6fdb' };
 
+// Which base map the guardian last chose ('map' or 'satellite'), kept per browser
+const BASE_KEY = 'safehaven_map_base';
+const readBase = () => {
+  try { return localStorage.getItem(BASE_KEY) === 'satellite' ? 'satellite' : 'map'; } catch (e) { return 'map'; }
+};
+
+// Zone outlines: on satellite imagery they get brighter colours and a firmer edge so they still read
+function zoneStyle(kind, satellite) {
+  const k = ZONE_KINDS[kind];
+  if (kind === 'restricted') {
+    const color = satellite ? '#ff6b61' : k.color;
+    return { color, weight: satellite ? 2.5 : 1.75, dashArray: null, fillColor: color, fillOpacity: satellite ? 0.2 : 0.12 };
+  }
+  const color = satellite ? '#4fe0a0' : k.color;
+  return { color, weight: satellite ? 2.25 : 1.5, dashArray: '5 5', fillColor: color, fillOpacity: satellite ? 0.14 : 0.07 };
+}
+
 export class LiveMap {
   constructor() {
     this.map = null;
     this.childLayers = {};
     this.zoneLayers = {};
+    this.baseLayers = [];
+    this.base = readBase();
     this.pickHandler = null;
     this.pickMarker = null;
     this.didFit = false;
@@ -20,10 +39,32 @@ export class LiveMap {
   mount(el) {
     if (this.map) return;
     this.map = L.map(el, { zoomControl: false, attributionControl: true, worldCopyJump: true }).setView([20, 0], 2);
-    L.tileLayer(config.mapTileUrl, { maxZoom: 19, attribution: config.mapTileAttribution }).addTo(this.map);
+    // Place names over satellite imagery: above zone shapes, below child pins, never catching clicks
+    const labels = this.map.createPane('labels');
+    labels.style.zIndex = 450;
+    labels.style.pointerEvents = 'none';
+    this.setBase(this.base);
     this.map.on('click', (e) => {
       if (this.pickHandler) this.pickHandler(e.latlng.lat, e.latlng.lng);
     });
+  }
+
+  /* 'map' = street map, 'satellite' = aerial imagery with place names on top */
+  setBase(base) {
+    this.base = base === 'satellite' ? 'satellite' : 'map';
+    try { localStorage.setItem(BASE_KEY, this.base); } catch (e) { /* storage blocked: choice lasts this visit */ }
+    if (!this.map) return;
+    this.baseLayers.forEach((layer) => layer.remove());
+    if (this.base === 'satellite') {
+      // Imagery isn't available at the deepest zoom everywhere: beyond 18 the 18 tiles are enlarged
+      this.baseLayers = [L.tileLayer(config.satelliteTileUrl, { maxZoom: 19, maxNativeZoom: 18, attribution: config.satelliteAttribution })];
+      if (config.satelliteLabelsUrl) this.baseLayers.push(L.tileLayer(config.satelliteLabelsUrl, { maxZoom: 19, maxNativeZoom: 18, pane: 'labels' }));
+    } else {
+      this.baseLayers = [L.tileLayer(config.mapTileUrl, { maxZoom: 19, attribution: config.mapTileAttribution })];
+    }
+    this.baseLayers.forEach((layer) => layer.addTo(this.map));
+    this.map.getContainer().classList.toggle('is-satellite', this.base === 'satellite');
+    for (const layer of Object.values(this.zoneLayers)) layer.setStyle(zoneStyle(layer.zoneKind, this.base === 'satellite'));
   }
 
   invalidate() {
@@ -70,9 +111,7 @@ export class LiveMap {
     for (const z of zones) {
       seen.add(z.id);
       const k = zoneKind(z);
-      const style = k.key === 'restricted'
-        ? { color: k.color, weight: 1.75, dashArray: null, fillColor: k.color, fillOpacity: 0.12 }
-        : { color: k.color, weight: 1.5, dashArray: '5 5', fillColor: k.color, fillOpacity: 0.07 };
+      const style = zoneStyle(k.key, this.base === 'satellite');
       let layer = this.zoneLayers[z.id];
       if (!layer) {
         layer = L.circle([z.lat, z.lng], { radius: z.radius_m, ...style }).addTo(this.map);
@@ -81,6 +120,7 @@ export class LiveMap {
       } else {
         layer.setLatLng([z.lat, z.lng]).setRadius(z.radius_m).setStyle(style);
       }
+      layer.zoneKind = k.key; // lets setBase() restyle it when the base map changes
       layer.unbindTooltip().bindTooltip(`${esc(z.name)} · ${k.key === 'restricted' ? 'Restricted · ' : ''}${z.radius_m} m`, { direction: 'top', className: `zone-tip zone-tip--${k.key}` });
     }
     for (const id of Object.keys(this.zoneLayers)) {
